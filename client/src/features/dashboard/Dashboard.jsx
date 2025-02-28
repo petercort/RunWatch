@@ -240,27 +240,36 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Group workflows by repository and workflow name
+  // Group workflows by organization and repository
   const groupedWorkflows = React.useMemo(() => {
     const groups = {};
     workflowRuns.forEach(workflow => {
+      // Extract organization name from repository full name (org/repo)
+      const [orgName, repoShortName] = workflow.repository.fullName.split('/');
       const repoKey = workflow.repository.fullName;
       const workflowKey = workflow.workflow.name;
       
-      if (!groups[repoKey]) {
-        groups[repoKey] = {
-          workflows: {}
+      if (!groups[orgName]) {
+        groups[orgName] = {
+          repositories: {}
         };
       }
       
-      if (!groups[repoKey].workflows[workflowKey]) {
-        groups[repoKey].workflows[workflowKey] = {
+      if (!groups[orgName].repositories[repoKey]) {
+        groups[orgName].repositories[repoKey] = {
+          workflows: {},
+          repoShortName // Store the short name for display
+        };
+      }
+      
+      if (!groups[orgName].repositories[repoKey].workflows[workflowKey]) {
+        groups[orgName].repositories[repoKey].workflows[workflowKey] = {
           runs: [],
-          history: [] // Store last 5 completed runs
+          history: []
         };
       }
       
-      const workflowGroup = groups[repoKey].workflows[workflowKey];
+      const workflowGroup = groups[orgName].repositories[repoKey].workflows[workflowKey];
       workflowGroup.runs.push(workflow);
       
       // Add to history if completed and not already there
@@ -278,9 +287,11 @@ const Dashboard = () => {
     });
 
     // Sort runs within each workflow by date
-    Object.values(groups).forEach(repo => {
-      Object.values(repo.workflows).forEach(workflow => {
-        workflow.runs.sort((a, b) => new Date(b.run.created_at) - new Date(a.run.created_at));
+    Object.values(groups).forEach(org => {
+      Object.values(org.repositories).forEach(repo => {
+        Object.values(repo.workflows).forEach(workflow => {
+          workflow.runs.sort((a, b) => new Date(b.run.created_at) - new Date(a.run.created_at));
+        });
       });
     });
 
@@ -340,7 +351,7 @@ const Dashboard = () => {
           fontSize: '1.75rem',
           color: '#E6EDF3'
         }}>
-          Repository Workflows
+          Organizations
         </Typography>
         <Tooltip title="Refresh">
           <IconButton 
@@ -370,10 +381,10 @@ const Dashboard = () => {
           </Typography>
         </Box>
       ) : (
-        <Stack spacing={3}>
-          {Object.entries(groupedWorkflows).map(([repoName, repoData]) => (
+        <Stack spacing={4}>
+          {Object.entries(groupedWorkflows).map(([orgName, orgData]) => (
             <Paper 
-              key={repoName} 
+              key={orgName} 
               elevation={0}
               sx={{ 
                 overflow: 'hidden',
@@ -382,99 +393,134 @@ const Dashboard = () => {
                 border: '1px solid rgba(240, 246, 252, 0.1)'
               }}
             >
+              {/* Organization Header */}
               <Box sx={{
-                p: 2.5,
-                display: 'flex',
-                alignItems: 'center',
+                p: 3,
                 borderBottom: '1px solid rgba(240, 246, 252, 0.1)',
+                background: 'linear-gradient(90deg, rgba(88, 166, 255, 0.1) 0%, rgba(88, 166, 255, 0.05) 100%)',
               }}>
-                <GitHubIcon sx={{ mr: 2, color: '#58A6FF' }} />
                 <Typography 
-                  variant="h6" 
-                  onClick={() => navigate(`/repository/${encodeURIComponent(repoName)}`)}
+                  variant="h5" 
                   sx={{ 
                     color: '#E6EDF3',
                     fontWeight: 600,
-                    fontSize: '1.1rem',
-                    cursor: 'pointer',
-                    '&:hover': {
-                      color: '#58A6FF'
-                    }
+                    fontSize: '1.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2
                   }}
                 >
-                  {repoName}
+                  <GitHubIcon sx={{ color: '#58A6FF' }} />
+                  {orgName}
                 </Typography>
               </Box>
 
+              {/* Repositories Section */}
               <Box sx={{ p: 3 }}>
-                <Stack spacing={2.5}>
-                  {Object.entries(repoData.workflows).map(([workflowKey, workflowData]) => {
-                    const latestRun = workflowData.runs[0];
-                    const hasHistory = workflowData.runs.length > 1;
-
-                    return (
-                      <Box
-                        key={workflowKey}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          p: 2,
-                          borderRadius: 1,
-                          bgcolor: 'rgba(13, 17, 23, 0.3)',
-                          border: '1px solid rgba(240, 246, 252, 0.1)',
-                        }}
-                      >
-                        <Box>
-                          <Typography 
-                            onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoName)}/${encodeURIComponent(workflowKey)}`)}
-                            sx={{ 
-                              color: '#E6EDF3', 
-                              fontWeight: 500,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                color: '#58A6FF',
-                              }
-                            }}
-                          >
-                            {workflowKey}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: '#8B949E' }}>
-                            Last run: {formatDate(latestRun.run.updated_at)}
-                          </Typography>
-                        </Box>
-                        
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center',
-                            py: 0.75,
-                            px: 1.5,
-                            gap: 1,
-                            borderRadius: '12px',
-                            border: '1px solid rgba(240, 246, 252, 0.05)',
-                            position: 'relative',
+                <Stack spacing={3}>
+                  {Object.entries(orgData.repositories).map(([repoKey, repoData]) => (
+                    <Paper
+                      key={repoKey}
+                      elevation={0}
+                      sx={{
+                        bgcolor: 'rgba(13, 17, 23, 0.3)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(240, 246, 252, 0.1)',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {/* Repository Header */}
+                      <Box sx={{
+                        p: 2.5,
+                        borderBottom: '1px solid rgba(240, 246, 252, 0.1)',
+                      }}>
+                        <Typography 
+                          onClick={() => navigate(`/repository/${encodeURIComponent(repoKey)}`)}
+                          sx={{ 
+                            color: '#E6EDF3',
+                            fontWeight: 500,
+                            cursor: 'pointer',
                             '&:hover': {
-                              borderColor: 'rgba(240, 246, 252, 0.1)'
+                              color: '#58A6FF'
                             }
-                          }}>
-                            {workflowData.runs.slice(0, 5).reverse().map((workflow) => {
-                              const run = {
-                                ...workflow.run,
-                                id: workflow.run.id.toString()
-                              };
-                              return (
-                                <BuildHistoryBadge
-                                  key={workflow.run.id}
-                                  run={run}
-                                />
-                              );
-                            })}
-                          </Box>
-                        </Box>
+                          }}
+                        >
+                          {repoData.repoShortName}
+                        </Typography>
                       </Box>
-                    );
-                  })}
+
+                      {/* Workflows */}
+                      <Box sx={{ p: 2.5 }}>
+                        <Stack spacing={2}>
+                          {Object.entries(repoData.workflows).map(([workflowKey, workflowData]) => {
+                            const latestRun = workflowData.runs[0];
+                            return (
+                              <Box
+                                key={workflowKey}
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  p: 2,
+                                  borderRadius: 1,
+                                  bgcolor: 'rgba(13, 17, 23, 0.5)',
+                                  border: '1px solid rgba(240, 246, 252, 0.05)',
+                                }}
+                              >
+                                <Box>
+                                  <Typography 
+                                    onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoKey)}/${encodeURIComponent(workflowKey)}`)}
+                                    sx={{ 
+                                      color: '#E6EDF3', 
+                                      fontWeight: 500,
+                                      cursor: 'pointer',
+                                      '&:hover': {
+                                        color: '#58A6FF',
+                                      }
+                                    }}
+                                  >
+                                    {workflowKey}
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ color: '#8B949E' }}>
+                                    Last run: {formatDate(latestRun.run.updated_at)}
+                                  </Typography>
+                                </Box>
+                                
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  <Box sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center',
+                                    py: 0.75,
+                                    px: 1.5,
+                                    gap: 1,
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(240, 246, 252, 0.05)',
+                                    position: 'relative',
+                                    '&:hover': {
+                                      borderColor: 'rgba(240, 246, 252, 0.1)'
+                                    }
+                                  }}>
+                                    {workflowData.runs.slice(0, 5).reverse().map((workflow) => {
+                                      const run = {
+                                        ...workflow.run,
+                                        id: workflow.run.id.toString()
+                                      };
+                                      return (
+                                        <BuildHistoryBadge
+                                          key={workflow.run.id}
+                                          run={run}
+                                        />
+                                      );
+                                    })}
+                                  </Box>
+                                </Box>
+                              </Box>
+                            );
+                          })}
+                        </Stack>
+                      </Box>
+                    </Paper>
+                  ))}
                 </Stack>
               </Box>
             </Paper>

@@ -10,12 +10,14 @@ import {
   Button,
   IconButton,
   Tooltip,
+  Stack,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   TrendingUp as TrendingUpIcon,
   Check as SuccessIcon,
   Close as FailureIcon,
+  GitHub as GitHubIcon,
 } from '@mui/icons-material';
 import {
   Chart as ChartJS,
@@ -31,6 +33,7 @@ import {
 } from 'chart.js';
 import { Bar, Pie, Line } from 'react-chartjs-2';
 import apiService from '../../api/apiService';
+import { useNavigate } from 'react-router-dom';
 
 // Register ChartJS components
 ChartJS.register(
@@ -49,12 +52,96 @@ const RepositoryStats = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
+
+  const processStats = (data) => {
+    // Group by organization
+    const orgStats = {};
+    data.repoStats?.forEach(repo => {
+      const [orgName] = repo._id.split('/');
+      if (!orgStats[orgName]) {
+        orgStats[orgName] = {
+          totalRuns: 0,
+          successfulRuns: 0,
+          failedRuns: 0,
+          repositories: [],
+          avgDuration: 0,
+          durations: []
+        };
+      }
+      
+      orgStats[orgName].repositories.push(repo);
+      orgStats[orgName].totalRuns += repo.totalRuns;
+      orgStats[orgName].successfulRuns += repo.successfulRuns;
+      orgStats[orgName].failedRuns += repo.failedRuns;
+      if (repo.avgDuration) {
+        orgStats[orgName].durations.push(repo.avgDuration);
+      }
+    });
+
+    // Calculate average durations for each org
+    Object.values(orgStats).forEach(org => {
+      org.avgDuration = org.durations.length 
+        ? org.durations.reduce((acc, curr) => acc + curr, 0) / org.durations.length 
+        : 0;
+    });
+
+    return {
+      ...data,
+      orgStats
+    };
+  };
+
+  // Prepare chart data for organizations
+  const prepareOrgChartData = (orgStats) => {
+    if (!orgStats) return null;
+
+    const orgLabels = Object.keys(orgStats);
+    const successData = orgLabels.map(org => orgStats[org].successfulRuns);
+    const failureData = orgLabels.map(org => orgStats[org].failedRuns);
+    const successRates = orgLabels.map(org => 
+      (orgStats[org].successfulRuns / orgStats[org].totalRuns * 100).toFixed(1)
+    );
+
+    return {
+      overview: {
+        labels: orgLabels,
+        datasets: [
+          {
+            label: 'Successful Runs',
+            data: successData,
+            backgroundColor: 'rgba(35, 197, 98, 0.6)',
+            borderColor: 'rgba(35, 197, 98, 1)',
+            borderWidth: 1,
+          },
+          {
+            label: 'Failed Runs',
+            data: failureData,
+            backgroundColor: 'rgba(248, 81, 73, 0.6)',
+            borderColor: 'rgba(248, 81, 73, 1)',
+            borderWidth: 1,
+          }
+        ]
+      },
+      successRates: {
+        labels: orgLabels,
+        datasets: [{
+          label: 'Success Rate (%)',
+          data: successRates,
+          backgroundColor: 'rgba(88, 166, 255, 0.6)',
+          borderColor: 'rgba(88, 166, 255, 1)',
+          borderWidth: 1,
+        }]
+      }
+    };
+  };
 
   const fetchStats = async () => {
     try {
       setLoading(true);
       const data = await apiService.getWorkflowStats();
-      setStats(data);
+      const processedData = processStats(data);
+      setStats(processedData);
       setError(null);
     } catch (err) {
       setError('Failed to fetch workflow statistics. Please try again later.');
@@ -176,7 +263,7 @@ const RepositoryStats = () => {
           fontSize: '1.75rem',
           color: '#E6EDF3'
         }}>
-          Workflow Statistics
+          Organization Statistics
         </Typography>
         <Tooltip title="Refresh">
           <IconButton 
@@ -194,7 +281,33 @@ const RepositoryStats = () => {
       </Box>
 
       <Grid container spacing={3}>
-        {/* Overview Cards */}
+        {/* Overall Stats Cards */}
+        <Grid item xs={12} md={4}>
+          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+            <CardContent>
+              <Typography sx={{ color: '#8B949E' }} gutterBottom>
+                Total Organizations
+              </Typography>
+              <Typography variant="h3" sx={{ color: '#E6EDF3' }}>
+                {stats.orgStats ? Object.keys(stats.orgStats).length : 0}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={4}>
+          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+            <CardContent>
+              <Typography sx={{ color: '#8B949E' }} gutterBottom>
+                Total Repositories
+              </Typography>
+              <Typography variant="h3" sx={{ color: '#E6EDF3' }}>
+                {stats.repoStats?.length || 0}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
         <Grid item xs={12} md={4}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
             <CardContent>
@@ -202,92 +315,66 @@ const RepositoryStats = () => {
                 Total Workflow Runs
               </Typography>
               <Typography variant="h3" sx={{ color: '#E6EDF3' }}>
-                {stats.totalRuns}
+                {stats.totalRuns || 0}
               </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Typography sx={{ color: '#8B949E' }} gutterBottom>
-                Successful Runs
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <SuccessIcon sx={{ color: '#23C562', mr: 1 }} />
-                <Typography variant="h3" sx={{ color: '#E6EDF3' }}>
-                  {stats.successfulRuns}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Typography sx={{ color: '#8B949E' }} gutterBottom>
-                Failed Runs
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <FailureIcon sx={{ color: '#F85149', mr: 1 }} />
-                <Typography variant="h3" sx={{ color: '#E6EDF3' }}>
-                  {stats.failedRuns}
-                </Typography>
-              </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Success Rate Chart */}
-        <Grid item xs={12} md={6}>
+        {/* Organization Overview Chart */}
+        <Grid item xs={12}>
           <Paper elevation={0} sx={{ 
-            p: 3, 
-            height: '100%',
+            p: 3,
             bgcolor: '#161B22',
             borderRadius: '12px',
             border: '1px solid rgba(240, 246, 252, 0.1)'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2 }}>
-              Success Rate
+            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
+              Organization Overview
             </Typography>
-            <Typography variant="subtitle1" sx={{ color: '#8B949E', mb: 3 }}>
-              {parseFloat(stats.successRate).toFixed(1)}% Success Rate
-            </Typography>
-            <Box sx={{ height: 300, display: 'flex', justifyContent: 'center' }}>
-              <Pie data={successRateData} options={{ 
-                responsive: true, 
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'bottom',
-                    labels: {
-                      color: '#8B949E'
+            <Box sx={{ height: 400 }}>
+              <Bar
+                data={prepareOrgChartData(stats.orgStats)?.overview}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'top',
+                      labels: { color: '#8B949E' }
+                    }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      grid: { color: 'rgba(240, 246, 252, 0.1)' },
+                      ticks: { color: '#8B949E' }
+                    },
+                    x: {
+                      grid: { color: 'rgba(240, 246, 252, 0.1)' },
+                      ticks: { color: '#8B949E' }
                     }
                   }
-                }
-              }} />
+                }}
+              />
             </Box>
           </Paper>
         </Grid>
 
-        {/* Activity Trend Chart */}
-        <Grid item xs={12} md={6}>
+        {/* Success Rates by Organization */}
+        <Grid item xs={12}>
           <Paper elevation={0} sx={{ 
-            p: 3, 
-            height: '100%',
+            p: 3,
             bgcolor: '#161B22',
             borderRadius: '12px',
             border: '1px solid rgba(240, 246, 252, 0.1)'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <TrendingUpIcon sx={{ mr: 1 }} />
-                Weekly Activity
-              </Box>
+            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
+              Success Rates by Organization
             </Typography>
             <Box sx={{ height: 300 }}>
-              <Line
-                data={trendData}
+              <Bar
+                data={prepareOrgChartData(stats.orgStats)?.successRates}
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
@@ -299,20 +386,16 @@ const RepositoryStats = () => {
                   scales: {
                     y: {
                       beginAtZero: true,
-                      grid: {
-                        color: 'rgba(240, 246, 252, 0.1)'
-                      },
-                      ticks: {
-                        color: '#8B949E'
+                      max: 100,
+                      grid: { color: 'rgba(240, 246, 252, 0.1)' },
+                      ticks: { 
+                        color: '#8B949E',
+                        callback: (value) => `${value}%`
                       }
                     },
                     x: {
-                      grid: {
-                        color: 'rgba(240, 246, 252, 0.1)'
-                      },
-                      ticks: {
-                        color: '#8B949E'
-                      }
+                      grid: { color: 'rgba(240, 246, 252, 0.1)' },
+                      ticks: { color: '#8B949E' }
                     }
                   }
                 }}
@@ -321,60 +404,144 @@ const RepositoryStats = () => {
           </Paper>
         </Grid>
 
-        {/* Repository Stats */}
-        {stats.repoStats && stats.repoStats.length > 0 && (
-          <Grid item xs={12}>
+        {/* Organization Details */}
+        {stats.orgStats && Object.entries(stats.orgStats).map(([orgName, orgData]) => (
+          <Grid item xs={12} key={orgName}>
             <Paper elevation={0} sx={{ 
               p: 3,
               bgcolor: '#161B22',
               borderRadius: '12px',
               border: '1px solid rgba(240, 246, 252, 0.1)'
             }}>
-              <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
-                Repository Statistics
+              <Typography variant="h6" sx={{ 
+                color: '#E6EDF3', 
+                mb: 3,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1
+              }}>
+                <GitHubIcon sx={{ color: '#58A6FF' }} />
+                {orgName}
               </Typography>
-              <Box sx={{ height: 400 }}>
-                <Bar
-                  data={repoStatsData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'top',
-                        labels: {
-                          color: '#8B949E'
-                        }
-                      }
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        grid: {
-                          color: 'rgba(240, 246, 252, 0.1)'
-                        },
-                        ticks: {
-                          color: '#8B949E'
-                        }
-                      },
-                      x: {
-                        grid: {
-                          color: 'rgba(240, 246, 252, 0.1)'
-                        },
-                        ticks: {
-                          color: '#8B949E'
-                        }
-                      }
-                    }
-                  }}
-                />
-              </Box>
+
+              {/* Organization Summary Cards */}
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={3}>
+                  <Card sx={{ bgcolor: 'rgba(13, 17, 23, 0.3)', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+                    <CardContent>
+                      <Typography sx={{ color: '#8B949E' }} gutterBottom>
+                        Success Rate
+                      </Typography>
+                      <Typography variant="h6" sx={{ color: '#23C562' }}>
+                        {(orgData.successfulRuns / orgData.totalRuns * 100).toFixed(1)}%
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Card sx={{ bgcolor: 'rgba(13, 17, 23, 0.3)', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+                    <CardContent>
+                      <Typography sx={{ color: '#8B949E' }} gutterBottom>
+                        Total Runs
+                      </Typography>
+                      <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
+                        {orgData.totalRuns}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Card sx={{ bgcolor: 'rgba(13, 17, 23, 0.3)', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+                    <CardContent>
+                      <Typography sx={{ color: '#8B949E' }} gutterBottom>
+                        Repositories
+                      </Typography>
+                      <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
+                        {orgData.repositories.length}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Card sx={{ bgcolor: 'rgba(13, 17, 23, 0.3)', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+                    <CardContent>
+                      <Typography sx={{ color: '#8B949E' }} gutterBottom>
+                        Avg Duration
+                      </Typography>
+                      <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
+                        {formatDuration(orgData.avgDuration)}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+
+              {/* Repository List */}
+              <Stack spacing={2}>
+                {orgData.repositories.map((repo) => (
+                  <Paper
+                    key={repo._id}
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      bgcolor: 'rgba(13, 17, 23, 0.3)',
+                      border: '1px solid rgba(240, 246, 252, 0.1)',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Box>
+                        <Typography 
+                          onClick={() => navigate(`/repository/${encodeURIComponent(repo._id)}`)}
+                          sx={{ 
+                            color: '#E6EDF3',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            '&:hover': {
+                              color: '#58A6FF',
+                            }
+                          }}
+                        >
+                          {repo._id.split('/')[1]}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 3 }}>
+                        <Box>
+                          <Typography variant="body2" sx={{ color: '#8B949E' }}>Success Rate</Typography>
+                          <Typography sx={{ color: '#23C562' }}>
+                            {(repo.successfulRuns / repo.totalRuns * 100).toFixed(1)}%
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="body2" sx={{ color: '#8B949E' }}>Total Runs</Typography>
+                          <Typography sx={{ color: '#E6EDF3' }}>
+                            {repo.totalRuns}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="body2" sx={{ color: '#8B949E' }}>Avg. Duration</Typography>
+                          <Typography sx={{ color: '#E6EDF3' }}>
+                            {formatDuration(repo.avgDuration)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </Paper>
+                ))}
+              </Stack>
             </Paper>
           </Grid>
-        )}
+        ))}
       </Grid>
     </Box>
   );
+};
+
+const formatDuration = (duration) => {
+  if (!duration) return 'N/A';
+  const minutes = Math.floor(duration / 60);
+  const seconds = duration % 60;
+  return `${minutes}m ${seconds}s`;
 };
 
 export default RepositoryStats;
