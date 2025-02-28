@@ -16,15 +16,18 @@ import {
   Paper,
   Collapse,
   Stack,
-  Link
+  Link,
+  SvgIcon
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   ExpandMore as ExpandMoreIcon,
   History as HistoryIcon,
   Schedule as ScheduleIcon,
+  GitHub as GitHubIcon,
+  RocketLaunch as RocketLaunchIcon,
+  Book as BookIcon,
 } from '@mui/icons-material';
-import GitHubIcon from '@mui/icons-material/GitHub';
 import apiService from '../../api/apiService';
 import { setupSocketListeners } from '../../api/socketService';
 import StatusChip from '../../common/components/StatusChip';
@@ -168,6 +171,8 @@ const BuildHistoryBadge = ({ run }) => {
     </Box>
   );
 };
+
+const RepositoryIcon = BookIcon;
 
 const Dashboard = () => {
   const [workflowRuns, setWorkflowRuns] = useState([]);
@@ -404,13 +409,9 @@ const Dashboard = () => {
                   sx={{ 
                     color: '#E6EDF3',
                     fontWeight: 600,
-                    fontSize: '1.25rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2
+                    fontSize: '1.25rem'
                   }}
                 >
-                  <GitHubIcon sx={{ color: '#58A6FF' }} />
                   {orgName}
                 </Typography>
               </Box>
@@ -440,34 +441,38 @@ const Dashboard = () => {
                             color: '#E6EDF3',
                             fontWeight: 500,
                             cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
                             '&:hover': {
                               color: '#58A6FF'
                             }
                           }}
                         >
+                          <RepositoryIcon sx={{ fontSize: '1.2rem', color: '#58A6FF' }} />
                           {repoData.repoShortName}
                         </Typography>
                       </Box>
 
                       {/* Workflows */}
                       <Box sx={{ p: 2.5 }}>
-                        <Stack spacing={2}>
+                        <Grid container spacing={2}>
                           {Object.entries(repoData.workflows).map(([workflowKey, workflowData]) => {
                             const latestRun = workflowData.runs[0];
                             return (
-                              <Box
-                                key={workflowKey}
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  p: 2,
-                                  borderRadius: 1,
-                                  bgcolor: 'rgba(13, 17, 23, 0.5)',
-                                  border: '1px solid rgba(240, 246, 252, 0.05)',
-                                }}
-                              >
-                                <Box>
+                              <Grid item xs={12} md={4} key={workflowKey}>
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 2,
+                                    p: 2,
+                                    borderRadius: 1,
+                                    bgcolor: 'rgba(13, 17, 23, 0.5)',
+                                    border: '1px solid rgba(240, 246, 252, 0.05)',
+                                    height: '100%',
+                                  }}
+                                >
                                   <Typography 
                                     onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoKey)}/${encodeURIComponent(workflowKey)}`)}
                                     sx={{ 
@@ -481,12 +486,7 @@ const Dashboard = () => {
                                   >
                                     {workflowKey}
                                   </Typography>
-                                  <Typography variant="body2" sx={{ color: '#8B949E' }}>
-                                    Last run: {formatDate(latestRun.run.updated_at)}
-                                  </Typography>
-                                </Box>
-                                
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  
                                   <Box sx={{ 
                                     display: 'flex', 
                                     alignItems: 'center',
@@ -500,7 +500,7 @@ const Dashboard = () => {
                                       borderColor: 'rgba(240, 246, 252, 0.1)'
                                     }
                                   }}>
-                                    {workflowData.runs.slice(0, 5).reverse().map((workflow) => {
+                                    {workflowData.runs.slice(0, 10).reverse().map((workflow) => {
                                       const run = {
                                         ...workflow.run,
                                         id: workflow.run.id.toString()
@@ -514,10 +514,10 @@ const Dashboard = () => {
                                     })}
                                   </Box>
                                 </Box>
-                              </Box>
+                              </Grid>
                             );
                           })}
-                        </Stack>
+                        </Grid>
                       </Box>
                     </Paper>
                   ))}
