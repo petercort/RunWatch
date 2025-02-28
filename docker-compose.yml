@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # MongoDB service
+  mongodb:
+    image: mongo:latest
+    container_name: runwatch-mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: runwatch
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - runwatch-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Backend service
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: runwatch-server
+    restart: always
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 5001
+      MONGODB_URI: mongodb://mongodb:27017/runwatch
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost}
+    ports:
+      - "5001:5001"
+    networks:
+      - runwatch-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # Frontend service
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: runwatch-client
+    restart: always
+    environment:
+      REACT_APP_API_URL: http://localhost/api
+      REACT_APP_WEBSOCKET_URL: ws://localhost
+    ports:
+      - "80:80"
+    networks:
+      - runwatch-network
+    depends_on:
+      - server
+
+networks:
+  runwatch-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

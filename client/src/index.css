@@ -1,0 +1,167 @@
+/* Base styles */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+:root {
+  --success-color: #4caf50;
+  --error-color: #f44336;
+  --warning-color: #ff9800;
+  --info-color: #2196f3;
+}
+
+.pending-animation {
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0D1117;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363D;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3F454D;
+}
+
+/* Global animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Apply animations to elements */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Glass effect utility classes */
+.glass-bg {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.glass-bg-dark {
+  background: rgba(22, 27, 34, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Progress bar animation */
+@keyframes progress {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+.progress-bar {
+  animation: progress 2s linear;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Status color indicators */
+.status-queued {
+  color: var(--info-color);
+}
+
+.status-in-progress {
+  color: var(--info-color);
+}
+
+.status-completed.conclusion-success {
+  color: var(--success-color);
+}
+
+.status-completed.conclusion-failure {
+  color: var(--error-color);
+}
+
+.status-completed.conclusion-cancelled, 
+.status-completed.conclusion-skipped,
+.status-completed.conclusion-timed_out,
+.status-completed.conclusion-action_required {
+  color: var(--warning-color);
+}
+
+/* Animated gradient borders */
+@keyframes gradientBorder {
+  0% { border-color: rgba(88, 166, 255, 0.2); }
+  50% { border-color: rgba(136, 207, 255, 0.3); }
+  100% { border-color: rgba(88, 166, 255, 0.2); }
+}
+
+.gradient-border {
+  position: relative;
+  animation: gradientBorder 3s ease infinite;
+}
+
+/* Repository card hover effect */
+.repo-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.repo-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #58A6FF, #88CFFF);
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+}
+
+.repo-card:hover::before {
+  transform: translateX(0);
+}
