@@ -22,7 +22,8 @@ import {
   Assessment as AssessmentIcon,
   GitHub as GitHubIcon,
   ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon
+  ChevronRight as ChevronRightIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 
 const expandedWidth = 280;
@@ -59,6 +60,7 @@ const Layout = ({ children }) => {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Statistics', icon: <AssessmentIcon />, path: '/stats' },
+    { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
   ];
 
   const drawer = (

@@ -31,7 +31,7 @@ const WorkflowRunSchema = new mongoose.Schema({
     conclusion: {
       type: String,
       enum: ['success', 'failure', 'cancelled', 'skipped', 'timed_out', 
-             'action_required', 'neutral', 'stale', null],
+             'action_required', 'neutral', 'stale', 'startup_failure', null],
       default: null
     },
     url: String

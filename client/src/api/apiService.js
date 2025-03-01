@@ -48,6 +48,50 @@ const apiService = {
       console.error('Error fetching workflow stats:', error);
       throw error;
     }
+  },
+
+  // Get available organizations
+  getOrganizations: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/organizations`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching organizations:', error);
+      throw error;
+    }
+  },
+
+  // Sync GitHub data using installation ID
+  syncGitHubData: async (installationId) => {
+    try {
+      const response = await fetch(`${API_URL}/sync/${encodeURIComponent(String(installationId))}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to sync GitHub data');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error syncing GitHub data:', error);
+      throw error;
+    }
+  },
+
+  // Get sync history
+  getSyncHistory: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/sync/history`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching sync history:', error);
+      throw error;
+    }
   }
 };
 
