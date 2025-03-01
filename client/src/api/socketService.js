@@ -1,4 +1,13 @@
-import { socket } from './apiService';
+import io from 'socket.io-client';
+
+// Use the environment variables, falling back to development defaults if not set
+const WS_URL = process.env.REACT_APP_WEBSOCKET_URL || 'ws://localhost';
+
+// Create socket connection
+export const socket = io(WS_URL, {
+  transports: ['websocket'],
+  path: '/socket.io'
+});
 
 // Debounce function to prevent rapid successive updates
 const debounce = (func, wait) => {
@@ -71,4 +80,9 @@ export const setupSocketListeners = (callbacks) => {
     socket.off('workflowJobsUpdate');
     lastUpdateTimes.clear();
   };
+};
+
+export default {
+  socket,
+  setupSocketListeners
 };

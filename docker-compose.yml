@@ -34,6 +34,13 @@ services:
       MONGODB_URI: mongodb://mongodb:27017/runwatch
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
       CLIENT_URL: ${CLIENT_URL:-http://localhost}
+      GITHUB_APP_ID: ${GITHUB_APP_ID}
+      GITHUB_APP_PRIVATE_KEY_PATH: /app/private-key.pem
+    volumes:
+      - type: bind
+        source: ./runwatch.2025-02-28.private-key.pem
+        target: /app/private-key.pem
+        read_only: true
     ports:
       - "5001:5001"
     networks:
