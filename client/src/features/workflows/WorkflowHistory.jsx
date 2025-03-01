@@ -19,6 +19,7 @@ import {
   CircularProgress,
   Button,
   Stack,
+  Chip,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -323,6 +324,10 @@ const WorkflowHistory = () => {
                   <TableRow>
                     <TableCell sx={{ color: '#8B949E' }}>Status</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Run #</TableCell>
+                    <TableCell sx={{ color: '#8B949E' }}>Branch</TableCell>
+                    <TableCell sx={{ color: '#8B949E' }}>Event</TableCell>
+                    <TableCell sx={{ color: '#8B949E' }}>Runner</TableCell>
+                    <TableCell sx={{ color: '#8B949E' }}>Labels</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Duration</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Started</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Actions</TableCell>
@@ -339,6 +344,33 @@ const WorkflowHistory = () => {
                       </TableCell>
                       <TableCell sx={{ color: '#E6EDF3' }}>
                         #{workflow.run.number}
+                      </TableCell>
+                      <TableCell sx={{ color: '#E6EDF3' }}>
+                        {workflow.run.head_branch || '-'}
+                      </TableCell>
+                      <TableCell sx={{ color: '#E6EDF3' }}>
+                        {workflow.run.event || '-'}
+                      </TableCell>
+                      <TableCell sx={{ color: '#E6EDF3' }}>
+                        {workflow.run.runner_name || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        {workflow.run.labels?.map((label, index) => (
+                          <Chip
+                            key={index}
+                            label={label}
+                            size="small"
+                            sx={{
+                              m: 0.5,
+                              bgcolor: '#21262D',
+                              color: '#E6EDF3',
+                              borderRadius: '12px',
+                              '& .MuiChip-label': {
+                                fontSize: '0.75rem'
+                              }
+                            }}
+                          />
+                        ))}
                       </TableCell>
                       <TableCell sx={{ color: '#E6EDF3' }}>
                         {formatDuration(workflow.run.created_at, workflow.run.updated_at)}

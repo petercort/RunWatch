@@ -34,7 +34,14 @@ const WorkflowRunSchema = new mongoose.Schema({
              'action_required', 'neutral', 'stale', 'startup_failure', null],
       default: null
     },
-    url: String
+    url: String,
+    head_branch: String,
+    event: String,
+    labels: [String],
+    runner_id: Number,
+    runner_name: String,
+    runner_group_id: Number,
+    runner_group_name: String
   },
   jobs: [{
     id: Number,

@@ -1,6 +1,7 @@
 import { getGitHubClient } from '../utils/githubAuth.js';
 import * as workflowService from './workflowService.js';
 import SyncHistory from '../models/SyncHistory.js';
+import WorkflowRun from '../models/WorkflowRun.js';
 
 export const getAvailableOrganizations = async () => {
     try {
@@ -38,6 +39,39 @@ export const syncGitHubData = async (installationId, socket) => {
         
         const orgName = installation.account.login;
         console.log('Organization name:', orgName);
+
+        // Clean up duplicate workflow runs before syncing
+        console.log('Cleaning up potential duplicates...');
+        const duplicates = await WorkflowRun.aggregate([
+            {
+                $group: {
+                    _id: {
+                        repoFullName: "$repository.fullName",
+                        workflowName: "$workflow.name",
+                        runNumber: "$run.number"
+                    },
+                    count: { $sum: 1 },
+                    docs: { $push: "$$ROOT" }
+                }
+            },
+            {
+                $match: {
+                    count: { $gt: 1 }
+                }
+            }
+        ]);
+
+        for (const duplicate of duplicates) {
+            // Sort by created date and keep only the most recent
+            const sorted = duplicate.docs.sort((a, b) => 
+                new Date(b.createdAt) - new Date(a.createdAt)
+            );
+            // Delete all but the most recent
+            const toDelete = sorted.slice(1);
+            await Promise.all(toDelete.map(doc => 
+                WorkflowRun.deleteOne({ _id: doc._id })
+            ));
+        }
 
         // Create sync history record
         syncRecord = await SyncHistory.create({
@@ -114,6 +148,27 @@ export const syncGitHubData = async (installationId, socket) => {
                                     run_id: run.id
                                 });
 
+                                // Determine the actual status based on jobs
+                                let actualStatus = run.status;
+                                let actualConclusion = run.conclusion;
+                                
+                                if (jobs && jobs.length > 0) {
+                                    const allCompleted = jobs.every(job => job.status === 'completed');
+                                    const anyInProgress = jobs.some(job => job.status === 'in_progress');
+                                    const anyFailed = jobs.some(job => job.conclusion === 'failure');
+                                    
+                                    if (allCompleted) {
+                                        actualStatus = 'completed';
+                                        actualConclusion = anyFailed ? 'failure' : 'success';
+                                    } else if (anyInProgress) {
+                                        actualStatus = 'in_progress';
+                                    }
+                                }
+
+                                // Update the run status before processing
+                                run.status = actualStatus;
+                                run.conclusion = actualConclusion;
+
                                 const workflowRunPayload = {
                                     action: 'completed',
                                     workflow_run: run,
@@ -121,17 +176,34 @@ export const syncGitHubData = async (installationId, socket) => {
                                     organization: { login: orgName }
                                 };
 
-                                await workflowService.processWorkflowRun(workflowRunPayload);
+                                const workflowRun = await workflowService.processWorkflowRun(workflowRunPayload);
 
                                 if (jobs && jobs.length > 0) {
                                     for (const job of jobs) {
+                                        console.log(`Processing job ${job.id} for run ${run.run_number}:`, {
+                                            labels: job.labels,
+                                            runLabels: run.labels,
+                                            jobName: job.name,
+                                            runNumber: run.run_number
+                                        });
+
+                                        // Attach run_number and labels from both workflow run and job
                                         const jobPayload = {
                                             action: 'completed',
-                                            workflow_job: job,
+                                            workflow_job: {
+                                                ...job,
+                                                run_number: run.run_number,
+                                                ...(job.labels && { labels: job.labels })
+                                            },
                                             repository: repo,
                                             organization: { login: orgName }
                                         };
                                         await workflowService.processWorkflowJobEvent(jobPayload);
+                                    }
+
+                                    // Emit update after processing all jobs
+                                    if (global.io) {
+                                        global.io.emit('workflowUpdate', workflowRun);
                                     }
                                 }
 
