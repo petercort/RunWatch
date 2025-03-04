@@ -108,10 +108,16 @@ const BuildHistoryBadge = ({ run }) => {
   return (
     <Box 
       sx={{ 
-        padding: '8px',
-        display: 'flex',
+        padding: '2px',
+        margin: '2px',
+        flexShrink: 0, // Prevent shrinking
+        display: 'inline-flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        width: '14px',  // Fixed width
+        height: '14px',  // Fixed height
+        position: 'relative', // Establish a stacking context
+        overflow: 'hidden' // Contain the badge effects
       }}
     >
       <Tooltip 
@@ -127,8 +133,10 @@ const BuildHistoryBadge = ({ run }) => {
             borderRadius: '50%',
             bgcolor: getColor(),
             cursor: 'pointer',
-            position: 'relative',
-            zIndex: 1,
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
             transition: 'all 0.2s ease',
             ...(run.status === 'in_progress' && {
               '&::before': {
@@ -146,9 +154,8 @@ const BuildHistoryBadge = ({ run }) => {
               }
             }),
             '&:hover': {
-              transform: 'scale(1.5)',
-              boxShadow: `0 0 8px ${getColor()}`,
-              zIndex: 2
+              transform: 'translate(-50%, -50%) scale(1.2)', // Keep centered while scaling
+              boxShadow: `0 0 3px ${getColor()}`, // Smaller shadow
             },
             '&::after': {
               content: '""',
@@ -456,11 +463,19 @@ const Dashboard = () => {
 
                       {/* Workflows */}
                       <Box sx={{ p: 2.5 }}>
-                        <Grid container spacing={2}>
+                        <Grid container spacing={3}> {/* Increased spacing between workflow columns */}
                           {Object.entries(repoData.workflows).map(([workflowKey, workflowData]) => {
                             const latestRun = workflowData.runs[0];
                             return (
-                              <Grid item xs={12} md={4} key={workflowKey}>
+                              <Grid 
+                                item 
+                                xs={12} 
+                                md={4} 
+                                key={workflowKey}
+                                sx={{ 
+                                  position: 'relative',
+                                }}
+                              >
                                 <Box
                                   sx={{
                                     display: 'flex',
@@ -471,6 +486,8 @@ const Dashboard = () => {
                                     bgcolor: 'rgba(13, 17, 23, 0.5)',
                                     border: '1px solid rgba(240, 246, 252, 0.05)',
                                     height: '100%',
+                                    overflow: 'hidden',
+                                    position: 'relative',
                                   }}
                                 >
                                   <Typography 
@@ -487,20 +504,26 @@ const Dashboard = () => {
                                     {workflowKey}
                                   </Typography>
                                   
+                                  {/* Improved badge container with better containment */}
                                   <Box sx={{ 
                                     display: 'flex', 
+                                    flexWrap: 'wrap',
                                     alignItems: 'center',
-                                    py: 0.75,
-                                    px: 1.5,
-                                    gap: 1,
-                                    borderRadius: '12px',
+                                    py: 0.5,
+                                    px: 1,
+                                    borderRadius: '8px',
                                     border: '1px solid rgba(240, 246, 252, 0.05)',
+                                    minHeight: '36px',
+                                    width: '100%',
                                     position: 'relative',
+                                    boxSizing: 'border-box',
+                                    overflow: 'hidden',
                                     '&:hover': {
                                       borderColor: 'rgba(240, 246, 252, 0.1)'
                                     }
                                   }}>
-                                    {workflowData.runs.slice(0, 10).reverse().map((workflow) => {
+                                    {/* Limit badges based on screen size */}
+                                    {workflowData.runs.slice(0, 8).reverse().map((workflow) => {
                                       const run = {
                                         ...workflow.run,
                                         id: workflow.run.id.toString()
