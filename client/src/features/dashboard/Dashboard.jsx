@@ -463,83 +463,110 @@ const Dashboard = () => {
 
                       {/* Workflows */}
                       <Box sx={{ p: 2.5 }}>
-                        <Grid container spacing={3}> {/* Increased spacing between workflow columns */}
-                          {Object.entries(repoData.workflows).map(([workflowKey, workflowData]) => {
-                            const latestRun = workflowData.runs[0];
-                            return (
-                              <Grid 
-                                item 
-                                xs={12} 
-                                md={4} 
-                                key={workflowKey}
+                        <Grid 
+                          container 
+                          spacing={2}
+                          columns={{ xs: 4, sm: 8, md: 12, lg: 16, xl: 40 }}
+                          sx={{
+                            display: 'grid',
+                            gridTemplateColumns: {
+                              xs: 'repeat(1, 1fr)',
+                              sm: 'repeat(2, 1fr)',
+                              md: 'repeat(3, 1fr)',
+                              lg: 'repeat(4, 1fr)',
+                              xl: 'repeat(10, 1fr)'
+                            },
+                            gap: 2,
+                          }}
+                        > 
+                          {Object.entries(repoData.workflows).map(([workflowKey, workflowData]) => (
+                            <Box
+                              key={workflowKey}
+                              sx={{ 
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 2,
+                                p: 2,
+                                borderRadius: 1,
+                                bgcolor: 'rgba(13, 17, 23, 0.5)',
+                                border: '1px solid rgba(240, 246, 252, 0.05)',
+                                height: '140px',
+                                width: '100%',
+                                minWidth: '200px',
+                                maxWidth: '100%',
+                                overflow: 'hidden',
+                                position: 'relative',
+                              }}
+                            >
+                              <Typography 
+                                onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoKey)}/${encodeURIComponent(workflowKey)}`)}
                                 sx={{ 
-                                  position: 'relative',
+                                  color: '#E6EDF3', 
+                                  fontWeight: 500,
+                                  cursor: 'pointer',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  '&:hover': {
+                                    color: '#58A6FF',
+                                  }
                                 }}
                               >
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 2,
-                                    p: 2,
-                                    borderRadius: 1,
-                                    bgcolor: 'rgba(13, 17, 23, 0.5)',
-                                    border: '1px solid rgba(240, 246, 252, 0.05)',
-                                    height: '100%',
-                                    overflow: 'hidden',
-                                    position: 'relative',
-                                  }}
-                                >
-                                  <Typography 
-                                    onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoKey)}/${encodeURIComponent(workflowKey)}`)}
-                                    sx={{ 
-                                      color: '#E6EDF3', 
-                                      fontWeight: 500,
-                                      cursor: 'pointer',
-                                      '&:hover': {
-                                        color: '#58A6FF',
-                                      }
-                                    }}
-                                  >
-                                    {workflowKey}
-                                  </Typography>
-                                  
-                                  {/* Improved badge container with better containment */}
-                                  <Box sx={{ 
-                                    display: 'flex', 
-                                    flexWrap: 'wrap',
-                                    alignItems: 'center',
-                                    py: 0.5,
-                                    px: 1,
-                                    borderRadius: '8px',
-                                    border: '1px solid rgba(240, 246, 252, 0.05)',
-                                    minHeight: '36px',
-                                    width: '100%',
-                                    position: 'relative',
-                                    boxSizing: 'border-box',
-                                    overflow: 'hidden',
-                                    '&:hover': {
-                                      borderColor: 'rgba(240, 246, 252, 0.1)'
-                                    }
-                                  }}>
-                                    {/* Limit badges based on screen size */}
-                                    {workflowData.runs.slice(0, 8).reverse().map((workflow) => {
-                                      const run = {
-                                        ...workflow.run,
-                                        id: workflow.run.id.toString()
-                                      };
-                                      return (
-                                        <BuildHistoryBadge
-                                          key={workflow.run.id}
-                                          run={run}
-                                        />
-                                      );
-                                    })}
-                                  </Box>
-                                </Box>
-                              </Grid>
-                            );
-                          })}
+                                {workflowKey}
+                              </Typography>
+                              
+                              <Box sx={{ 
+                                display: 'flex', 
+                                flexWrap: 'nowrap',
+                                alignItems: 'center',
+                                gap: 0.5,
+                                py: 0.5,
+                                px: 1,
+                                borderRadius: '8px',
+                                border: '1px solid rgba(240, 246, 252, 0.05)',
+                                minHeight: '36px',
+                                height: '36px',
+                                flex: 1,
+                                position: 'relative',
+                                boxSizing: 'border-box',
+                                overflow: 'hidden',
+                                '&:hover': {
+                                  borderColor: 'rgba(240, 246, 252, 0.1)'
+                                }
+                              }}>
+                                {workflowData.runs.slice(0, 10).reverse().map((workflow, index) => {
+                                  const run = {
+                                    ...workflow.run,
+                                    id: workflow.run.id.toString()
+                                  };
+                                  return (
+                                    <Box
+                                      key={workflow.run.id}
+                                      sx={{
+                                        position: 'relative',
+                                        '&::after': index === 0 ? {
+                                          content: '""',
+                                          position: 'absolute',
+                                          top: -12,
+                                          left: '50%',
+                                          transform: 'translateX(-50%)',
+                                          width: 0,
+                                          height: 0,
+                                          borderLeft: '4px solid transparent',
+                                          borderRight: '4px solid transparent',
+                                          borderTop: '4px solid #58A6FF',
+                                        } : undefined
+                                      }}
+                                    >
+                                      <BuildHistoryBadge
+                                        run={run}
+                                      />
+                                    </Box>
+                                  );
+                                })}
+                              </Box>
+                            </Box>
+                          ))}
                         </Grid>
                       </Box>
                     </Paper>
