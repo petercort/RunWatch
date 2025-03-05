@@ -22,10 +22,17 @@ const syncHistorySchema = new mongoose.Schema({
     completedAt: Date,
     status: {
         type: String,
-        enum: ['in_progress', 'paused', 'completed', 'failed'],
+        enum: ['in_progress', 'paused', 'completed', 'failed', 'interrupted'],
         default: 'in_progress'
     },
+    config: {
+        maxWorkflowRuns: {
+            type: Number,
+            required: true
+        }
+    },
     results: {
+        totalRepositories: Number,
         repositories: Number,
         workflows: Number,
         runs: Number,
@@ -59,7 +66,10 @@ const syncHistorySchema = new mongoose.Schema({
             repoIndex: Number,
             totalRepos: Number,
             workflowIndex: Number,
-            totalWorkflows: Number
+            totalWorkflows: Number,
+            processedRepos: Number,
+            processedWorkflows: Number,
+            processedRuns: Number
         }
     }
 });

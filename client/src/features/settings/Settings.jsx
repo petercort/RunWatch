@@ -192,6 +192,35 @@ const Settings = () => {
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', py: 4 }}>
+      {rateLimits && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            GitHub API Rate Limits
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Typography variant="body1">
+              Remaining: {rateLimits.remaining}/{rateLimits.limit}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Resets at: {new Date(rateLimits.resetTime).toLocaleTimeString()}
+            </Typography>
+            <LinearProgress 
+              variant="determinate" 
+              value={(rateLimits.remaining / rateLimits.limit) * 100}
+              sx={{ 
+                width: 100,
+                height: 8,
+                borderRadius: 4,
+                bgcolor: 'rgba(0, 0, 0, 0.1)',
+                '& .MuiLinearProgress-bar': {
+                  bgcolor: rateLimits.remaining < 1000 ? '#ff9800' : '#4caf50',
+                  borderRadius: 4
+                }
+              }}
+            />
+          </Box>
+        </Paper>
+      )}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h5" component="h1" gutterBottom>
           GitHub Synchronization
@@ -199,36 +228,6 @@ const Settings = () => {
         <Typography variant="body1" color="text.secondary" paragraph>
           Sync your GitHub Actions workflow history with RunWatch. This will fetch historical data for all workflows in your organization's repositories.
         </Typography>
-
-        {rateLimits && (
-          <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(0, 0, 0, 0.1)', borderRadius: 1 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              GitHub API Rate Limits
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <Typography variant="body2">
-                Remaining: {rateLimits.remaining}/{rateLimits.limit}
-              </Typography>
-              <Typography variant="body2">
-                Resets: {new Date(rateLimits.resetTime).toLocaleTimeString()}
-              </Typography>
-              <LinearProgress 
-                variant="determinate" 
-                value={(rateLimits.remaining / rateLimits.limit) * 100}
-                sx={{ 
-                  width: 100,
-                  height: 8,
-                  borderRadius: 4,
-                  bgcolor: 'rgba(255, 255, 255, 0.1)',
-                  '& .MuiLinearProgress-bar': {
-                    bgcolor: rateLimits.remaining < 1000 ? '#ff9800' : '#4caf50',
-                    borderRadius: 4
-                  }
-                }}
-              />
-            </Box>
-          </Box>
-        )}
 
         <Stack spacing={3}>
           <FormControl fullWidth>
@@ -306,7 +305,7 @@ const Settings = () => {
                 '& .MuiLinearProgress-bar': {
                   bgcolor: '#58A6FF',
                   borderRadius: 4,
-                  transition: 'transform 0.3s ease' // Smooth progress transitions
+                  transition: 'transform 0.3s ease'
                 }
               }}
             />
