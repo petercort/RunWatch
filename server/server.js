@@ -9,6 +9,7 @@ import setupSocket from './src/middleware/socket.js';
 import setupGithubWebhooks from './src/middleware/github.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import getRawBody from 'raw-body';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,25 +33,15 @@ global.io = io;
 // Basic middleware
 app.use(cors());
 
-// Parse raw body for webhook endpoint
-app.use('/api/webhooks/github', (req, res, next) => {
-  let data = '';
-  req.setEncoding('utf8');
-  
-  req.on('data', chunk => {
-    data += chunk;
-  });
-  
-  req.on('end', () => {
-    req.rawBody = data;
+// Raw body handler for GitHub webhooks
+app.use('/api/webhooks/github', express.raw({ type: '*/*' }), (req, res, next) => {
+  try {
+    const rawBody = req.body; // This is already a Buffer
+    req.rawBody = rawBody;
     
-    // Handle form-encoded data
     if (req.headers['content-type']?.includes('application/x-www-form-urlencoded')) {
       try {
-        // Store the raw form data for signature verification
-        req.rawBody = data;
-        // Parse the payload for processing
-        const match = data.match(/^payload=(.+)$/);
+        const match = rawBody.toString().match(/^payload=(.+)$/);
         if (match) {
           const decodedPayload = decodeURIComponent(match[1]);
           req.body = JSON.parse(decodedPayload);
@@ -59,20 +50,26 @@ app.use('/api/webhooks/github', (req, res, next) => {
         console.error('Error parsing form-encoded payload:', error);
       }
     } else {
-      // For JSON payloads, use the raw body for both verification and processing
-      try {
-        req.body = JSON.parse(data);
-      } catch (error) {
-        console.error('Error parsing JSON payload:', error);
-      }
+      req.body = JSON.parse(rawBody.toString());
     }
-    
     next();
-  });
+  } catch (error) {
+    console.error('Error parsing webhook payload:', error);
+    res.status(400).json({ 
+      error: 'Error parsing webhook payload',
+      message: error.message
+    });
+  }
 });
 
 // Parse JSON for other routes
-app.use(express.json());
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/webhooks/github')) {
+    express.json()(req, res, next);
+  } else {
+    next();
+  }
+});
 
 // Make io available in request object
 app.use((req, res, next) => {
@@ -116,24 +113,21 @@ app.post('/api/webhooks/github', async (req, res) => {
   console.log('Delivery ID:', id);
   console.log('Content-Type:', contentType);
   console.log('Signature:', signature);
-  
+  console.log('Raw body length:', req.rawBody?.length);
+
   if (!signature || !id || !name) {
     console.error('Missing required webhook headers');
     return res.status(400).json({ error: 'Missing required webhook headers' });
   }
 
   try {
-    const rawBody = req.rawBody;
-    console.log('Raw body length:', rawBody?.length);
-    console.log('Raw body preview:', rawBody?.substring(0, 100));
-
     // First verify the signature with the raw body
     const verified = await webhooks.verify({
       id,
       name,
       signature,
       payload: req.body,
-      rawBody
+      rawBody: req.rawBody
     });
 
     if (!verified) {
@@ -150,7 +144,6 @@ app.post('/api/webhooks/github', async (req, res) => {
     res.status(200).json({ success: true });
   } catch (error) {
     console.error('Webhook verification or processing failed:', error);
-    console.error('Raw body:', req.rawBody);
     res.status(400).json({ 
       error: 'Webhook verification failed',
       message: error.message

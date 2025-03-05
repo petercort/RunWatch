@@ -2,6 +2,7 @@ import express from 'express';
 import * as workflowController from '../controllers/workflowController.js';
 import { syncGitHubData, getAvailableOrganizations, getSyncHistory } from '../services/syncService.js';
 import { validateGitHubConfig } from '../utils/githubAuth.js';
+import SyncHistory from '../models/SyncHistory.js';
 
 const router = express.Router();
 
@@ -67,13 +68,35 @@ router.get('/sync/history', async (req, res) => {
     }
 });
 
+// Get active sync status
+router.get('/sync/active', async (req, res) => {
+    try {
+        const activeSync = await SyncHistory.findOne({
+            status: { $in: ['in_progress', 'paused'] }
+        }).sort({ startedAt: -1 });
+        
+        res.json({
+            success: true,
+            data: activeSync
+        });
+    } catch (error) {
+        console.error('Error fetching active sync:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch active sync status',
+            error: error.message
+        });
+    }
+});
+
 // Sync endpoint using installation ID
 router.post('/sync/:installationId', async (req, res) => {
     try {
         validateGitHubConfig();
         const { installationId } = req.params;
+        const { maxWorkflowRuns = 100 } = req.body;
         
-        const results = await syncGitHubData(installationId, req.io);
+        const results = await syncGitHubData(installationId, req.io, { maxWorkflowRuns });
         
         res.json({
             success: true,

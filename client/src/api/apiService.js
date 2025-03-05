@@ -62,13 +62,14 @@ const apiService = {
   },
 
   // Sync GitHub data using installation ID
-  syncGitHubData: async (installationId) => {
+  syncGitHubData: async (installationId, options = { maxWorkflowRuns: 100 }) => {
     try {
       const response = await fetch(`${API_URL}/sync/${encodeURIComponent(String(installationId))}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify(options)
       });
       
       if (!response.ok) {
@@ -90,6 +91,17 @@ const apiService = {
       return response.data;
     } catch (error) {
       console.error('Error fetching sync history:', error);
+      throw error;
+    }
+  },
+
+  // Get active sync status
+  getActiveSync: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/sync/active`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching active sync:', error);
       throw error;
     }
   }

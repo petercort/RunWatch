@@ -9,6 +9,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  ListItemButton,
   Divider,
   FormControl,
   InputLabel,
@@ -18,12 +19,14 @@ import {
   LinearProgress,
   Chip,
   Card,
-  CardContent
+  CardContent,
+  FormHelperText
 } from '@mui/material';
 import { Sync as SyncIcon } from '@mui/icons-material';
 import apiService from '../../api/apiService';
 import { socket } from '../../api/socketService';
 import { formatDistanceToNow } from 'date-fns';
+import SyncHistoryDetails from './SyncHistoryDetails';
 
 const Settings = () => {
   const [syncing, setSyncing] = useState(false);
@@ -35,24 +38,96 @@ const Settings = () => {
   const [progress, setProgress] = useState(0);
   const [currentOperation, setCurrentOperation] = useState(null);
   const [syncHistory, setSyncHistory] = useState([]);
+  const [maxWorkflowRuns, setMaxWorkflowRuns] = useState(100);
+  const [rateLimits, setRateLimits] = useState(null);
+  const [syncDetails, setSyncDetails] = useState(null);
+  const [activeSync, setActiveSync] = useState(null);
+  const [selectedSync, setSelectedSync] = useState(null);
+
+  const fetchActiveSync = async () => {
+    try {
+      const response = await apiService.getActiveSync();
+      if (response.data) {
+        const sync = response.data;
+        setActiveSync(sync);
+        setSyncing(sync.status === 'in_progress' || sync.status === 'paused');
+        if (sync.results?.progress) {
+          setProgress(sync.results.progress.current);
+          if (sync.results.progress.currentRepo) {
+            setCurrentOperation({
+              repo: sync.results.progress.currentRepo,
+              workflow: sync.results.progress.currentWorkflow
+            });
+          }
+          setSyncDetails({
+            currentRepoIndex: sync.results.progress.repoIndex + 1,
+            totalRepos: sync.results.progress.totalRepos,
+            currentWorkflowIndex: sync.results.progress.workflowIndex !== null ? 
+              sync.results.progress.workflowIndex + 1 : undefined,
+            totalWorkflows: sync.results.progress.totalWorkflows
+          });
+        }
+        if (sync.results?.rateLimits) {
+          setRateLimits(sync.results.rateLimits);
+        }
+        if (sync.status === 'paused') {
+          setError(`Sync paused: Rate limit reached. Will resume at ${new Date(sync.results.rateLimitPause.resumeAt).toLocaleString()}`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch active sync:', err);
+    }
+  };
 
   useEffect(() => {
     fetchOrganizations();
     fetchSyncHistory();
+    fetchActiveSync();
     
-    // Set up socket listener for sync progress
+    // Set up socket listeners
+    socket.on('connect', () => {
+      console.log('Socket connected, fetching active sync...');
+      fetchActiveSync();
+    });
+
     socket.on('syncProgress', (data) => {
+      setSyncing(true);
       setProgress(data.progress);
+      if (data.rateLimits) {
+        setRateLimits(data.rateLimits);
+      }
       if (data.currentRepo && data.currentWorkflow) {
         setCurrentOperation({
           repo: data.currentRepo,
           workflow: data.currentWorkflow
         });
       }
+      if (data.details) {
+        setSyncDetails(data.details);
+      }
+      if (data.completed) {
+        setSyncing(false);
+        setActiveSync(null);
+      }
+    });
+
+    socket.on('rateLimitUpdate', (data) => {
+      setRateLimits(data);
+    });
+
+    socket.on('syncStatus', (data) => {
+      if (data.status === 'paused') {
+        setError(data.message);
+      } else if (data.status === 'resumed') {
+        setError(null);
+      }
     });
 
     return () => {
+      socket.off('connect');
       socket.off('syncProgress');
+      socket.off('rateLimitUpdate');
+      socket.off('syncStatus');
     };
   }, []);
 
@@ -91,7 +166,7 @@ const Settings = () => {
       setProgress(0);
       setCurrentOperation(null);
       
-      const response = await apiService.syncGitHubData(selectedInstallation);
+      const response = await apiService.syncGitHubData(selectedInstallation, { maxWorkflowRuns });
       setResults(response.results);
       await fetchSyncHistory(); // Refresh history after sync
     } catch (err) {
@@ -101,6 +176,10 @@ const Settings = () => {
       setProgress(0);
       setCurrentOperation(null);
     }
+  };
+
+  const handleSyncClick = (sync) => {
+    setSelectedSync(sync);
   };
 
   if (loading) {
@@ -113,6 +192,35 @@ const Settings = () => {
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', py: 4 }}>
+      {rateLimits && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            GitHub API Rate Limits
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Typography variant="body1">
+              Remaining: {rateLimits.remaining}/{rateLimits.limit}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Resets at: {new Date(rateLimits.resetTime).toLocaleTimeString()}
+            </Typography>
+            <LinearProgress 
+              variant="determinate" 
+              value={(rateLimits.remaining / rateLimits.limit) * 100}
+              sx={{ 
+                width: 100,
+                height: 8,
+                borderRadius: 4,
+                bgcolor: 'rgba(0, 0, 0, 0.1)',
+                '& .MuiLinearProgress-bar': {
+                  bgcolor: rateLimits.remaining < 1000 ? '#ff9800' : '#4caf50',
+                  borderRadius: 4
+                }
+              }}
+            />
+          </Box>
+        </Paper>
+      )}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h5" component="h1" gutterBottom>
           GitHub Synchronization
@@ -139,6 +247,26 @@ const Settings = () => {
             </Select>
           </FormControl>
 
+          <FormControl fullWidth>
+            <InputLabel id="run-limit-label">Workflow Runs Limit</InputLabel>
+            <Select
+              labelId="run-limit-label"
+              value={maxWorkflowRuns}
+              label="Workflow Runs Limit"
+              onChange={(e) => setMaxWorkflowRuns(e.target.value)}
+              disabled={syncing}
+            >
+              <MenuItem value={10}>Last 10 runs</MenuItem>
+              <MenuItem value={50}>Last 50 runs</MenuItem>
+              <MenuItem value={100}>Last 100 runs</MenuItem>
+              <MenuItem value={500}>Last 500 runs</MenuItem>
+              <MenuItem value={1000}>Last 1000 runs</MenuItem>
+            </Select>
+            <FormHelperText>
+              Limit the number of workflow runs to import per workflow
+            </FormHelperText>
+          </FormControl>
+
           <Button
             variant="contained"
             startIcon={syncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
@@ -151,13 +279,19 @@ const Settings = () => {
 
         {syncing && (
           <Box sx={{ mt: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+              <Typography variant="body2" color="text.secondary">
                 {progress}% Complete
               </Typography>
-              {currentOperation && (
+              {syncDetails && (
                 <Typography variant="body2" color="text.secondary">
-                  Processing: {currentOperation.repo} - {currentOperation.workflow}
+                  Repository {syncDetails.currentRepoIndex}/{syncDetails.totalRepos}
+                  {syncDetails.currentWorkflowIndex !== undefined && ` • Workflow ${syncDetails.currentWorkflowIndex}/${syncDetails.totalWorkflows}`}
+                </Typography>
+              )}
+              {currentOperation && (
+                <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+                  Current: {currentOperation.repo} - {currentOperation.workflow}
                 </Typography>
               )}
             </Box>
@@ -170,7 +304,8 @@ const Settings = () => {
                 bgcolor: 'rgba(88, 166, 255, 0.1)',
                 '& .MuiLinearProgress-bar': {
                   bgcolor: '#58A6FF',
-                  borderRadius: 4
+                  borderRadius: 4,
+                  transition: 'transform 0.3s ease'
                 }
               }}
             />
@@ -246,40 +381,52 @@ const Settings = () => {
           Sync History
         </Typography>
         <List>
-          {syncHistory.map((sync) => (
-            <Card key={sync._id} sx={{ mb: 2, bgcolor: 'rgba(13, 17, 23, 0.3)' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="subtitle1">
-                    {sync.organization.name}
-                  </Typography>
-                  <Chip
-                    label={sync.status}
-                    color={
-                      sync.status === 'completed' ? 'success' :
-                      sync.status === 'failed' ? 'error' :
-                      'warning'
-                    }
-                    size="small"
-                  />
-                </Box>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  {formatDistanceToNow(new Date(sync.startedAt))} ago
-                </Typography>
-                {sync.status === 'completed' && sync.results && (
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2">
-                      Processed: {sync.results.repositories} repositories, {sync.results.workflows} workflows, {sync.results.runs} runs
-                    </Typography>
-                    {sync.results.errors?.length > 0 && (
-                      <Typography variant="body2" color="error">
-                        Errors: {sync.results.errors.length}
+          {syncHistory.map((sync, index) => (
+            <React.Fragment key={sync._id}>
+              {index > 0 && <Divider />}
+              <ListItemButton onClick={() => handleSyncClick(sync)}>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography>{sync.organization.name}</Typography>
+                      <Chip 
+                        label={sync.status} 
+                        size="small"
+                        color={
+                          sync.status === 'completed' ? 'success' :
+                          sync.status === 'failed' ? 'error' :
+                          sync.status === 'in_progress' ? 'info' :
+                          sync.status === 'paused' ? 'warning' :
+                          sync.status === 'interrupted' ? 'error' : 'default'
+                        }
+                      />
+                    </Box>
+                  }
+                  secondary={
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Started {formatDistanceToNow(new Date(sync.startedAt))} ago
                       </Typography>
-                    )}
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
+                      {sync.status === 'in_progress' && sync.results?.progress && (
+                        <Box sx={{ mt: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={sync.results.progress.current} 
+                            sx={{
+                              height: 4,
+                              borderRadius: 2,
+                            }}
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            {sync.results.progress.current}% Complete
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  }
+                />
+              </ListItemButton>
+            </React.Fragment>
           ))}
           {syncHistory.length === 0 && (
             <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
@@ -288,6 +435,11 @@ const Settings = () => {
           )}
         </List>
       </Paper>
+
+      <SyncHistoryDetails 
+        sync={selectedSync} 
+        onClose={() => setSelectedSync(null)} 
+      />
     </Box>
   );
 };
