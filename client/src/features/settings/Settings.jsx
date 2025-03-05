@@ -9,6 +9,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  ListItemButton,
   Divider,
   FormControl,
   InputLabel,
@@ -25,6 +26,7 @@ import { Sync as SyncIcon } from '@mui/icons-material';
 import apiService from '../../api/apiService';
 import { socket } from '../../api/socketService';
 import { formatDistanceToNow } from 'date-fns';
+import SyncHistoryDetails from './SyncHistoryDetails';
 
 const Settings = () => {
   const [syncing, setSyncing] = useState(false);
@@ -40,6 +42,7 @@ const Settings = () => {
   const [rateLimits, setRateLimits] = useState(null);
   const [syncDetails, setSyncDetails] = useState(null);
   const [activeSync, setActiveSync] = useState(null);
+  const [selectedSync, setSelectedSync] = useState(null);
 
   const fetchActiveSync = async () => {
     try {
@@ -173,6 +176,10 @@ const Settings = () => {
       setProgress(0);
       setCurrentOperation(null);
     }
+  };
+
+  const handleSyncClick = (sync) => {
+    setSelectedSync(sync);
   };
 
   if (loading) {
@@ -375,40 +382,52 @@ const Settings = () => {
           Sync History
         </Typography>
         <List>
-          {syncHistory.map((sync) => (
-            <Card key={sync._id} sx={{ mb: 2, bgcolor: 'rgba(13, 17, 23, 0.3)' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="subtitle1">
-                    {sync.organization.name}
-                  </Typography>
-                  <Chip
-                    label={sync.status}
-                    color={
-                      sync.status === 'completed' ? 'success' :
-                      sync.status === 'failed' ? 'error' :
-                      'warning'
-                    }
-                    size="small"
-                  />
-                </Box>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  {formatDistanceToNow(new Date(sync.startedAt))} ago
-                </Typography>
-                {sync.status === 'completed' && sync.results && (
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2">
-                      Processed: {sync.results.repositories} repositories, {sync.results.workflows} workflows, {sync.results.runs} runs
-                    </Typography>
-                    {sync.results.errors?.length > 0 && (
-                      <Typography variant="body2" color="error">
-                        Errors: {sync.results.errors.length}
+          {syncHistory.map((sync, index) => (
+            <React.Fragment key={sync._id}>
+              {index > 0 && <Divider />}
+              <ListItemButton onClick={() => handleSyncClick(sync)}>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography>{sync.organization.name}</Typography>
+                      <Chip 
+                        label={sync.status} 
+                        size="small"
+                        color={
+                          sync.status === 'completed' ? 'success' :
+                          sync.status === 'failed' ? 'error' :
+                          sync.status === 'in_progress' ? 'info' :
+                          sync.status === 'paused' ? 'warning' :
+                          sync.status === 'interrupted' ? 'error' : 'default'
+                        }
+                      />
+                    </Box>
+                  }
+                  secondary={
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Started {formatDistanceToNow(new Date(sync.startedAt))} ago
                       </Typography>
-                    )}
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
+                      {sync.status === 'in_progress' && sync.results?.progress && (
+                        <Box sx={{ mt: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={sync.results.progress.current} 
+                            sx={{
+                              height: 4,
+                              borderRadius: 2,
+                            }}
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            {sync.results.progress.current}% Complete
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  }
+                />
+              </ListItemButton>
+            </React.Fragment>
           ))}
           {syncHistory.length === 0 && (
             <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
@@ -417,6 +436,11 @@ const Settings = () => {
           )}
         </List>
       </Paper>
+
+      <SyncHistoryDetails 
+        sync={selectedSync} 
+        onClose={() => setSelectedSync(null)} 
+      />
     </Box>
   );
 };

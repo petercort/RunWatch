@@ -3,6 +3,27 @@ import * as workflowService from './workflowService.js';
 import SyncHistory from '../models/SyncHistory.js';
 import WorkflowRun from '../models/WorkflowRun.js';
 
+// Mark any existing in_progress syncs as interrupted when starting up
+const markInterruptedSyncs = async () => {
+    try {
+        await SyncHistory.updateMany(
+            { status: 'in_progress' },
+            { 
+                status: 'interrupted',
+                completedAt: new Date(),
+                results: {
+                    error: 'Sync process was interrupted by application restart'
+                }
+            }
+        );
+    } catch (error) {
+        console.error('Error marking interrupted syncs:', error);
+    }
+};
+
+// Call this when the module loads
+markInterruptedSyncs();
+
 export const getAvailableOrganizations = async () => {
     try {
         console.log('Getting GitHub App installations...');
@@ -28,6 +49,9 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
     let syncRecord;
     
     try {
+        // First ensure any existing in_progress syncs are marked as interrupted
+        await markInterruptedSyncs();
+
         const { app: octokit } = await getGitHubClient(parseInt(installationId, 10));
         console.log('GitHub client initialized');
 
@@ -186,21 +210,46 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
             try {
                 await checkRateLimit();
 
+                // Validate repository name to ensure it's in the correct format
+                if (!repo.name || typeof repo.name !== 'string') {
+                    throw new Error('Invalid repository name format');
+                }
+
+                // Calculate progress
+                const repoProgress = Math.floor((repoIndex / repos.length) * 85) + 15;
+                await updateProgress(
+                    repoProgress,
+                    repo.name,
+                    null,
+                    repoIndex,
+                    repos.length,
+                    undefined,
+                    undefined
+                );
+
                 // Fetch workflows with pagination
                 const workflows = [];
                 page = 1;
                 
                 while (true) {
-                    const { data: { workflows: workflowsPage } } = await octokit.rest.actions.listRepoWorkflows({
-                        owner: orgName,
-                        repo: repo.name,
-                        per_page: 100,
-                        page
-                    });
+                    try {
+                        const { data: { workflows: workflowsPage } } = await octokit.rest.actions.listRepoWorkflows({
+                            owner: orgName,
+                            repo: repo.name,
+                            per_page: 100,
+                            page
+                        });
 
-                    if (workflowsPage.length === 0) break;
-                    workflows.push(...workflowsPage);
-                    page++;
+                        if (workflowsPage.length === 0) break;
+                        workflows.push(...workflowsPage);
+                        page++;
+                    } catch (error) {
+                        if (error.status === 404) {
+                            console.log(`No workflows found for repository ${repo.name}`);
+                            break;
+                        }
+                        throw error;
+                    }
                 }
 
                 for (let workflowIndex = 0; workflowIndex < workflows.length; workflowIndex++) {
@@ -229,17 +278,39 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
                         page = 1;
                         
                         while (runs.length < options.maxWorkflowRuns) {
-                            const { data: { workflow_runs: runsPage } } = await octokit.rest.actions.listWorkflowRuns({
-                                owner: orgName,
-                                repo: repo.name,
-                                workflow_id: workflow.id,
-                                per_page: Math.min(100, options.maxWorkflowRuns - runs.length),
-                                page
-                            });
+                            try {
+                                const { data: { workflow_runs: runsPage } } = await octokit.rest.actions.listWorkflowRuns({
+                                    owner: orgName,
+                                    repo: repo.name,
+                                    workflow_id: workflow.id,
+                                    per_page: Math.min(100, options.maxWorkflowRuns - runs.length),
+                                    page
+                                });
 
-                            if (runsPage.length === 0) break;
-                            runs.push(...runsPage);
-                            page++;
+                                if (runsPage.length === 0) break;
+                                
+                                // Validate and normalize run status
+                                runsPage.forEach(run => {
+                                    // Ensure status is one of the valid enum values
+                                    if (!['completed', 'action_required', 'cancelled', 'failure', 'neutral', 
+                                         'skipped', 'stale', 'success', 'timed_out', 'in_progress', 'queued', 
+                                         'requested', 'waiting', 'pending'].includes(run.status)) {
+                                        run.status = 'pending';
+                                    }
+                                    
+                                    // Ensure conclusion is one of the valid enum values or null
+                                    if (run.conclusion && !['success', 'failure', 'cancelled', 'skipped', 'timed_out', 
+                                                           'action_required', 'neutral', 'stale', 'startup_failure'].includes(run.conclusion)) {
+                                        run.conclusion = null;
+                                    }
+                                });
+                                
+                                runs.push(...runsPage);
+                                page++;
+                            } catch (error) {
+                                console.error(`Error fetching runs for workflow ${workflow.name}:`, error);
+                                break;
+                            }
                         }
 
                         results.workflows++;
