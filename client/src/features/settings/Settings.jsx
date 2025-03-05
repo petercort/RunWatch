@@ -18,7 +18,8 @@ import {
   LinearProgress,
   Chip,
   Card,
-  CardContent
+  CardContent,
+  FormHelperText
 } from '@mui/material';
 import { Sync as SyncIcon } from '@mui/icons-material';
 import apiService from '../../api/apiService';
@@ -35,14 +36,19 @@ const Settings = () => {
   const [progress, setProgress] = useState(0);
   const [currentOperation, setCurrentOperation] = useState(null);
   const [syncHistory, setSyncHistory] = useState([]);
+  const [maxWorkflowRuns, setMaxWorkflowRuns] = useState(100);
+  const [rateLimits, setRateLimits] = useState(null);
 
   useEffect(() => {
     fetchOrganizations();
     fetchSyncHistory();
     
-    // Set up socket listener for sync progress
+    // Set up socket listeners
     socket.on('syncProgress', (data) => {
       setProgress(data.progress);
+      if (data.rateLimits) {
+        setRateLimits(data.rateLimits);
+      }
       if (data.currentRepo && data.currentWorkflow) {
         setCurrentOperation({
           repo: data.currentRepo,
@@ -51,8 +57,22 @@ const Settings = () => {
       }
     });
 
+    socket.on('rateLimitUpdate', (data) => {
+      setRateLimits(data);
+    });
+
+    socket.on('syncStatus', (data) => {
+      if (data.status === 'paused') {
+        setError(data.message);
+      } else if (data.status === 'resumed') {
+        setError(null);
+      }
+    });
+
     return () => {
       socket.off('syncProgress');
+      socket.off('rateLimitUpdate');
+      socket.off('syncStatus');
     };
   }, []);
 
@@ -91,7 +111,7 @@ const Settings = () => {
       setProgress(0);
       setCurrentOperation(null);
       
-      const response = await apiService.syncGitHubData(selectedInstallation);
+      const response = await apiService.syncGitHubData(selectedInstallation, { maxWorkflowRuns });
       setResults(response.results);
       await fetchSyncHistory(); // Refresh history after sync
     } catch (err) {
@@ -121,6 +141,36 @@ const Settings = () => {
           Sync your GitHub Actions workflow history with RunWatch. This will fetch historical data for all workflows in your organization's repositories.
         </Typography>
 
+        {rateLimits && (
+          <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(0, 0, 0, 0.1)', borderRadius: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              GitHub API Rate Limits
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Typography variant="body2">
+                Remaining: {rateLimits.remaining}/{rateLimits.limit}
+              </Typography>
+              <Typography variant="body2">
+                Resets: {new Date(rateLimits.resetTime).toLocaleTimeString()}
+              </Typography>
+              <LinearProgress 
+                variant="determinate" 
+                value={(rateLimits.remaining / rateLimits.limit) * 100}
+                sx={{ 
+                  width: 100,
+                  height: 8,
+                  borderRadius: 4,
+                  bgcolor: 'rgba(255, 255, 255, 0.1)',
+                  '& .MuiLinearProgress-bar': {
+                    bgcolor: rateLimits.remaining < 1000 ? '#ff9800' : '#4caf50',
+                    borderRadius: 4
+                  }
+                }}
+              />
+            </Box>
+          </Box>
+        )}
+
         <Stack spacing={3}>
           <FormControl fullWidth>
             <InputLabel id="org-select-label">Organization</InputLabel>
@@ -137,6 +187,26 @@ const Settings = () => {
                 </MenuItem>
               ))}
             </Select>
+          </FormControl>
+
+          <FormControl fullWidth>
+            <InputLabel id="run-limit-label">Workflow Runs Limit</InputLabel>
+            <Select
+              labelId="run-limit-label"
+              value={maxWorkflowRuns}
+              label="Workflow Runs Limit"
+              onChange={(e) => setMaxWorkflowRuns(e.target.value)}
+              disabled={syncing}
+            >
+              <MenuItem value={10}>Last 10 runs</MenuItem>
+              <MenuItem value={50}>Last 50 runs</MenuItem>
+              <MenuItem value={100}>Last 100 runs</MenuItem>
+              <MenuItem value={500}>Last 500 runs</MenuItem>
+              <MenuItem value={1000}>Last 1000 runs</MenuItem>
+            </Select>
+            <FormHelperText>
+              Limit the number of workflow runs to import per workflow
+            </FormHelperText>
           </FormControl>
 
           <Button

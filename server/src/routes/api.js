@@ -72,8 +72,9 @@ router.post('/sync/:installationId', async (req, res) => {
     try {
         validateGitHubConfig();
         const { installationId } = req.params;
+        const { maxWorkflowRuns = 100 } = req.body;
         
-        const results = await syncGitHubData(installationId, req.io);
+        const results = await syncGitHubData(installationId, req.io, { maxWorkflowRuns });
         
         res.json({
             success: true,
