@@ -38,7 +38,7 @@ services:
       GITHUB_APP_PRIVATE_KEY_PATH: /app/private-key.pem
     volumes:
       - type: bind
-        source: ./runwatch.2025-02-28.private-key.pem
+        source: ${GITHUB_APP_PRIVATE_KEY_PATH}
         target: /app/private-key.pem
         read_only: true
     ports:
