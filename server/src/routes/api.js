@@ -2,6 +2,7 @@ import express from 'express';
 import * as workflowController from '../controllers/workflowController.js';
 import { syncGitHubData, getAvailableOrganizations, getSyncHistory } from '../services/syncService.js';
 import { validateGitHubConfig } from '../utils/githubAuth.js';
+import SyncHistory from '../models/SyncHistory.js';
 
 const router = express.Router();
 
@@ -62,6 +63,27 @@ router.get('/sync/history', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch sync history',
+            error: error.message
+        });
+    }
+});
+
+// Get active sync status
+router.get('/sync/active', async (req, res) => {
+    try {
+        const activeSync = await SyncHistory.findOne({
+            status: { $in: ['in_progress', 'paused'] }
+        }).sort({ startedAt: -1 });
+        
+        res.json({
+            success: true,
+            data: activeSync
+        });
+    } catch (error) {
+        console.error('Error fetching active sync:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch active sync status',
             error: error.message
         });
     }

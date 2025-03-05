@@ -115,6 +115,38 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
         // Initial rate limit check
         await checkRateLimit();
 
+        // Function to update progress and sync record
+        const updateProgress = async (progress, currentRepo, currentWorkflow, repoIndex, totalRepos, workflowIndex, totalWorkflows) => {
+            if (socket) {
+                socket.emit('syncProgress', {
+                    progress,
+                    currentRepo,
+                    currentWorkflow,
+                    rateLimits: results.rateLimits,
+                    details: {
+                        currentRepoIndex: repoIndex + 1,
+                        totalRepos,
+                        currentWorkflowIndex: workflowIndex !== undefined ? workflowIndex + 1 : undefined,
+                        totalWorkflows
+                    }
+                });
+            }
+
+            // Update sync record with current progress
+            await SyncHistory.findByIdAndUpdate(syncRecord._id, {
+                'results.progress': {
+                    current: progress,
+                    total: 100,
+                    currentRepo,
+                    currentWorkflow,
+                    repoIndex,
+                    totalRepos,
+                    workflowIndex,
+                    totalWorkflows
+                }
+            });
+        };
+
         // Get all repositories in the organization with pagination
         console.log('Fetching repositories...');
         const repos = [];
@@ -134,19 +166,23 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
             repos.push(...reposPage);
             page++;
             
-            if (socket) {
-                socket.emit('syncProgress', {
-                    phase: 'fetching_repos',
-                    repositoriesFound: repos.length
-                });
-            }
+            // Update progress for repository fetching phase
+            await updateProgress(
+                Math.floor((repos.length / (reposPage.length * page)) * 15), // First 15% for repo fetching
+                'Fetching repositories...',
+                null,
+                repos.length,
+                undefined,
+                undefined,
+                undefined
+            );
         }
 
         results.repositories = repos.length;
-        let processedRepos = 0;
 
         // Process each repository
-        for (const repo of repos) {
+        for (let repoIndex = 0; repoIndex < repos.length; repoIndex++) {
+            const repo = repos[repoIndex];
             try {
                 await checkRateLimit();
 
@@ -167,12 +203,26 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
                     page++;
                 }
 
-                let processedWorkflows = 0;
-                const totalWorkflows = workflows.length;
-
-                for (const workflow of workflows) {
+                for (let workflowIndex = 0; workflowIndex < workflows.length; workflowIndex++) {
+                    const workflow = workflows[workflowIndex];
                     try {
                         await checkRateLimit();
+
+                        // Calculate overall progress
+                        // 15% for repo fetching + 85% for processing
+                        const repoProgress = (repoIndex / repos.length) * 85;
+                        const workflowProgress = (workflowIndex / workflows.length) * (85 / repos.length);
+                        const totalProgress = Math.floor(15 + repoProgress + workflowProgress);
+
+                        await updateProgress(
+                            totalProgress,
+                            repo.name,
+                            workflow.name,
+                            repoIndex,
+                            repos.length,
+                            workflowIndex,
+                            workflows.length
+                        );
 
                         // Fetch workflow runs with pagination, limited by maxWorkflowRuns
                         const runs = [];
@@ -193,21 +243,6 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
                         }
 
                         results.workflows++;
-                        processedWorkflows++;
-
-                        // Calculate and emit progress
-                        const repoProgress = (processedRepos / repos.length) * 100;
-                        const workflowProgress = (processedWorkflows / totalWorkflows) * 100;
-                        const totalProgress = (repoProgress + (workflowProgress / repos.length));
-                        
-                        if (socket) {
-                            socket.emit('syncProgress', {
-                                progress: Math.round(totalProgress),
-                                currentRepo: repo.name,
-                                currentWorkflow: workflow.name,
-                                rateLimits: results.rateLimits
-                            });
-                        }
 
                         // Process each run
                         for (const run of runs) {
@@ -312,7 +347,7 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
                         });
                     }
                 }
-                processedRepos++;
+                
             } catch (error) {
                 console.error(`Error processing repository ${repo.name}:`, error);
                 results.errors.push({
@@ -321,6 +356,36 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
                     error: error.message
                 });
             }
+        }
+
+        // Set final progress
+        await updateProgress(100, null, null, repos.length, repos.length, null, null);
+
+        // Update sync record with final results
+        await SyncHistory.findByIdAndUpdate(syncRecord._id, {
+            status: 'completed',
+            completedAt: new Date(),
+            results: {
+                ...results,
+                progress: {
+                    current: 100,
+                    total: 100,
+                    currentRepo: null,
+                    currentWorkflow: null,
+                    repoIndex: repos.length,
+                    totalRepos: repos.length,
+                    workflowIndex: null,
+                    totalWorkflows: null
+                }
+            }
+        });
+
+        // Set progress to 100% when completed
+        if (socket) {
+            socket.emit('syncProgress', { 
+                progress: 100,
+                completed: true
+            });
         }
 
         // Update sync record with results

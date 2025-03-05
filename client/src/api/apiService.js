@@ -93,6 +93,17 @@ const apiService = {
       console.error('Error fetching sync history:', error);
       throw error;
     }
+  },
+
+  // Get active sync status
+  getActiveSync: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/sync/active`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching active sync:', error);
+      throw error;
+    }
   }
 };
 

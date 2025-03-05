@@ -38,13 +38,57 @@ const Settings = () => {
   const [syncHistory, setSyncHistory] = useState([]);
   const [maxWorkflowRuns, setMaxWorkflowRuns] = useState(100);
   const [rateLimits, setRateLimits] = useState(null);
+  const [syncDetails, setSyncDetails] = useState(null);
+  const [activeSync, setActiveSync] = useState(null);
+
+  const fetchActiveSync = async () => {
+    try {
+      const response = await apiService.getActiveSync();
+      if (response.data) {
+        const sync = response.data;
+        setActiveSync(sync);
+        setSyncing(sync.status === 'in_progress' || sync.status === 'paused');
+        if (sync.results?.progress) {
+          setProgress(sync.results.progress.current);
+          if (sync.results.progress.currentRepo) {
+            setCurrentOperation({
+              repo: sync.results.progress.currentRepo,
+              workflow: sync.results.progress.currentWorkflow
+            });
+          }
+          setSyncDetails({
+            currentRepoIndex: sync.results.progress.repoIndex + 1,
+            totalRepos: sync.results.progress.totalRepos,
+            currentWorkflowIndex: sync.results.progress.workflowIndex !== null ? 
+              sync.results.progress.workflowIndex + 1 : undefined,
+            totalWorkflows: sync.results.progress.totalWorkflows
+          });
+        }
+        if (sync.results?.rateLimits) {
+          setRateLimits(sync.results.rateLimits);
+        }
+        if (sync.status === 'paused') {
+          setError(`Sync paused: Rate limit reached. Will resume at ${new Date(sync.results.rateLimitPause.resumeAt).toLocaleString()}`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch active sync:', err);
+    }
+  };
 
   useEffect(() => {
     fetchOrganizations();
     fetchSyncHistory();
+    fetchActiveSync();
     
     // Set up socket listeners
+    socket.on('connect', () => {
+      console.log('Socket connected, fetching active sync...');
+      fetchActiveSync();
+    });
+
     socket.on('syncProgress', (data) => {
+      setSyncing(true);
       setProgress(data.progress);
       if (data.rateLimits) {
         setRateLimits(data.rateLimits);
@@ -54,6 +98,13 @@ const Settings = () => {
           repo: data.currentRepo,
           workflow: data.currentWorkflow
         });
+      }
+      if (data.details) {
+        setSyncDetails(data.details);
+      }
+      if (data.completed) {
+        setSyncing(false);
+        setActiveSync(null);
       }
     });
 
@@ -70,6 +121,7 @@ const Settings = () => {
     });
 
     return () => {
+      socket.off('connect');
       socket.off('syncProgress');
       socket.off('rateLimitUpdate');
       socket.off('syncStatus');
@@ -221,13 +273,19 @@ const Settings = () => {
 
         {syncing && (
           <Box sx={{ mt: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+              <Typography variant="body2" color="text.secondary">
                 {progress}% Complete
               </Typography>
-              {currentOperation && (
+              {syncDetails && (
                 <Typography variant="body2" color="text.secondary">
-                  Processing: {currentOperation.repo} - {currentOperation.workflow}
+                  Repository {syncDetails.currentRepoIndex}/{syncDetails.totalRepos}
+                  {syncDetails.currentWorkflowIndex !== undefined && ` • Workflow ${syncDetails.currentWorkflowIndex}/${syncDetails.totalWorkflows}`}
+                </Typography>
+              )}
+              {currentOperation && (
+                <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+                  Current: {currentOperation.repo} - {currentOperation.workflow}
                 </Typography>
               )}
             </Box>
@@ -240,7 +298,8 @@ const Settings = () => {
                 bgcolor: 'rgba(88, 166, 255, 0.1)',
                 '& .MuiLinearProgress-bar': {
                   bgcolor: '#58A6FF',
-                  borderRadius: 4
+                  borderRadius: 4,
+                  transition: 'transform 0.3s ease' // Smooth progress transitions
                 }
               }}
             />
