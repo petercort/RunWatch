@@ -498,22 +498,77 @@ const Dashboard = () => {
                                 position: 'relative',
                               }}
                             >
-                              <Typography 
-                                onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoKey)}/${encodeURIComponent(workflowKey)}`)}
-                                sx={{ 
-                                  color: '#E6EDF3', 
-                                  fontWeight: 500,
-                                  cursor: 'pointer',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  '&:hover': {
-                                    color: '#58A6FF',
-                                  }
-                                }}
-                              >
-                                {workflowKey}
-                              </Typography>
+                              <Box sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                width: '100%',
+                                mb: 1
+                              }}>
+                                <Typography 
+                                  onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoKey)}/${encodeURIComponent(workflowKey)}`)}
+                                  sx={{ 
+                                    color: '#E6EDF3', 
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    flex: 1,
+                                    minWidth: 0,
+                                    '&:hover': {
+                                      color: '#58A6FF',
+                                    }
+                                  }}
+                                >
+                                  {workflowKey}
+                                </Typography>
+
+                                <Stack 
+                                  direction="row" 
+                                  spacing={2} 
+                                  sx={{ 
+                                    ml: 2,
+                                    alignItems: 'center'
+                                  }}
+                                >
+                                  <Tooltip title="Total builds">
+                                    <Box sx={{ 
+                                      display: 'flex', 
+                                      alignItems: 'center',
+                                      color: '#8B949E',
+                                      fontSize: '0.75rem',
+                                      '& svg': { fontSize: '0.875rem', mr: 0.5 }
+                                    }}>
+                                      <RocketLaunchIcon />
+                                      {workflowData.runs.length}
+                                    </Box>
+                                  </Tooltip>
+
+                                  <Tooltip title="Average duration">
+                                    <Box sx={{ 
+                                      display: 'flex', 
+                                      alignItems: 'center',
+                                      color: '#8B949E',
+                                      fontSize: '0.75rem',
+                                      '& svg': { fontSize: '0.875rem', mr: 0.5 }
+                                    }}>
+                                      <ScheduleIcon />
+                                      {(() => {
+                                        const completedRuns = workflowData.runs.filter(w => w.run.status === 'completed');
+                                        if (completedRuns.length === 0) return '-';
+                                        const totalDuration = completedRuns.reduce((acc, w) => {
+                                          const start = new Date(w.run.created_at);
+                                          const end = new Date(w.run.updated_at);
+                                          return acc + (end - start);
+                                        }, 0);
+                                        const avgDuration = totalDuration / completedRuns.length;
+                                        return formatDuration(new Date(), new Date(new Date().getTime() + avgDuration));
+                                      })()}
+                                    </Box>
+                                  </Tooltip>
+                                </Stack>
+                              </Box>
                               
                               <Box sx={{ 
                                 display: 'flex', 
