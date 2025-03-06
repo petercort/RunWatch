@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -17,7 +17,9 @@ import {
   Collapse,
   Stack,
   Link,
-  SvgIcon
+  SvgIcon,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -27,6 +29,8 @@ import {
   GitHub as GitHubIcon,
   RocketLaunch as RocketLaunchIcon,
   Book as BookIcon,
+  Search as SearchIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import apiService from '../../api/apiService';
 import { setupSocketListeners } from '../../api/socketService';
@@ -186,7 +190,16 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expandedWorkflows, setExpandedWorkflows] = useState(new Set());
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const saved = localStorage.getItem('dashboardSearchQuery');
+    return saved || '';
+  });
   const navigate = useNavigate();
+
+  // Save search query to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('dashboardSearchQuery', searchQuery);
+  }, [searchQuery]);
 
   const fetchWorkflowRuns = async () => {
     try {
@@ -310,6 +323,56 @@ const Dashboard = () => {
     return groups;
   }, [workflowRuns]);
 
+  // Filter repositories based on search query
+  const filteredGroupedWorkflows = useMemo(() => {
+    const groups = {};
+    workflowRuns.forEach(workflow => {
+      const [orgName, repoShortName] = workflow.repository.fullName.split('/');
+      const repoKey = workflow.repository.fullName;
+      const workflowKey = workflow.workflow.name;
+      
+      // Only include repositories that match the search query
+      if (searchQuery && !repoKey.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return;
+      }
+
+      if (!groups[orgName]) {
+        groups[orgName] = {
+          repositories: {}
+        };
+      }
+      
+      if (!groups[orgName].repositories[repoKey]) {
+        groups[orgName].repositories[repoKey] = {
+          workflows: {},
+          repoShortName
+        };
+      }
+      
+      if (!groups[orgName].repositories[repoKey].workflows[workflowKey]) {
+        groups[orgName].repositories[repoKey].workflows[workflowKey] = {
+          runs: [],
+          history: []
+        };
+      }
+      
+      const workflowGroup = groups[orgName].repositories[repoKey].workflows[workflowKey];
+      workflowGroup.runs.push(workflow);
+      
+      if (workflow.run.status === 'completed' && 
+          !workflowGroup.history.some(h => h.id === workflow.run.id)) {
+        workflowGroup.history.unshift({
+          id: workflow.run.id,
+          conclusion: workflow.run.conclusion
+        });
+        if (workflowGroup.history.length > 5) {
+          workflowGroup.history.pop();
+        }
+      }
+    });
+    return groups;
+  }, [workflowRuns, searchQuery]);
+
   const toggleWorkflowHistory = (workflowKey) => {
     setExpandedWorkflows(prev => {
       const newSet = new Set(prev);
@@ -320,6 +383,11 @@ const Dashboard = () => {
       }
       return newSet;
     });
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    localStorage.removeItem('dashboardSearchQuery');
   };
 
   if (loading) {
@@ -365,22 +433,51 @@ const Dashboard = () => {
         }}>
           Organizations
         </Typography>
-        <Tooltip title="Refresh">
-          <IconButton 
-            onClick={fetchWorkflowRuns}
-            sx={{ 
-              color: '#58A6FF',
-              '&:hover': {
-                bgcolor: 'rgba(88, 166, 255, 0.1)'
-              }
-            }}
-          >
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextField
+              size="small"
+              placeholder="Search repositories..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              sx={{ width: 250 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={handleClearSearch}
+                      sx={{ color: '#8B949E' }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              }}
+            />
+          </Box>
+          <Tooltip title="Refresh">
+            <IconButton 
+              onClick={fetchWorkflowRuns}
+              sx={{ 
+                color: '#58A6FF',
+                '&:hover': {
+                  bgcolor: 'rgba(88, 166, 255, 0.1)'
+                }
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
 
-      {Object.entries(groupedWorkflows).length === 0 ? (
+      {Object.entries(filteredGroupedWorkflows).length === 0 ? (
         <Box sx={{
           textAlign: 'center',
           py: 8,
@@ -394,7 +491,7 @@ const Dashboard = () => {
         </Box>
       ) : (
         <Stack spacing={4}>
-          {Object.entries(groupedWorkflows).map(([orgName, orgData]) => (
+          {Object.entries(filteredGroupedWorkflows).map(([orgName, orgData]) => (
             <Paper 
               key={orgName} 
               elevation={0}
