@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import WorkflowRun from '../models/WorkflowRun.js';
 import { successResponse, errorResponse } from '../utils/responseHandler.js';
 import * as workflowService from '../services/workflowService.js';
@@ -56,13 +57,26 @@ export const updateWorkflowJobs = async (req, res) => {
 
 export const getDatabaseStatus = async (req, res) => {
   try {
-    const stats = {
-      totalWorkflows: await WorkflowRun.countDocuments(),
-      lastUpdated: await WorkflowRun.findOne().sort({ 'run.updated_at': -1 }).select('run.updated_at'),
-      storageSize: await WorkflowRun.collection.stats().then(stats => stats.size),
+    const db = mongoose.connection.db;
+    const stats = await db.stats();
+    const lastWorkflowRun = await WorkflowRun.findOne().sort({ 'run.updated_at': -1 });
+    const totalWorkflows = await WorkflowRun.countDocuments();
+
+    const status = {
+      totalWorkflows,
+      lastUpdated: {
+        run: lastWorkflowRun
+      },
+      storageSize: stats.storageSize,
+      dataSize: stats.dataSize,
+      collections: stats.collections,
+      indexes: stats.indexes,
+      avgObjSize: stats.avgObjSize,
+      ok: stats.ok
     };
-    return successResponse(res, stats);
+
+    return successResponse(res, status);
   } catch (error) {
-    return errorResponse(res, 'Error getting database status', 500, error);
+    return errorResponse(res, 'Error retrieving database status', 500, error);
   }
 };

@@ -20,9 +20,10 @@ import {
   Chip,
   Card,
   CardContent,
-  FormHelperText
+  FormHelperText,
+  Grid
 } from '@mui/material';
-import { Sync as SyncIcon } from '@mui/icons-material';
+import { Sync as SyncIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import apiService from '../../api/apiService';
 import { socket } from '../../api/socketService';
 import { formatDistanceToNow } from 'date-fns';
@@ -43,6 +44,7 @@ const Settings = () => {
   const [syncDetails, setSyncDetails] = useState(null);
   const [activeSync, setActiveSync] = useState(null);
   const [selectedSync, setSelectedSync] = useState(null);
+  const [dbStatus, setDbStatus] = useState(null);
 
   const fetchActiveSync = async () => {
     try {
@@ -83,6 +85,7 @@ const Settings = () => {
     fetchOrganizations();
     fetchSyncHistory();
     fetchActiveSync();
+    fetchDatabaseStatus();
     
     // Set up socket listeners
     socket.on('connect', () => {
@@ -153,6 +156,15 @@ const Settings = () => {
     }
   };
 
+  const fetchDatabaseStatus = async () => {
+    try {
+      const status = await apiService.getDatabaseStatus();
+      setDbStatus(status);
+    } catch (err) {
+      console.error('Failed to fetch database status:', err);
+    }
+  };
+
   const handleSync = async () => {
     if (!selectedInstallation) {
       setError('Please select an organization to sync');
@@ -192,6 +204,119 @@ const Settings = () => {
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', py: 4 }}>
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Database Health
+        </Typography>
+        {dbStatus ? (
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="text.secondary" gutterBottom variant="body2">
+                    Status
+                  </Typography>
+                  <Chip 
+                    label={dbStatus.ok ? "Healthy" : "Unhealthy"}
+                    color={dbStatus.ok ? "success" : "error"}
+                    size="small"
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="text.secondary" gutterBottom variant="body2">
+                    Total Workflows
+                  </Typography>
+                  <Typography variant="h6">
+                    {dbStatus.totalWorkflows?.toLocaleString() || 'N/A'}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="text.secondary" gutterBottom variant="body2">
+                    Storage Size
+                  </Typography>
+                  <Typography variant="h6">
+                    {`${(dbStatus.storageSize / (1024 * 1024)).toFixed(1)} MB`}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="text.secondary" gutterBottom variant="body2">
+                    Data Size
+                  </Typography>
+                  <Typography variant="h6">
+                    {`${(dbStatus.dataSize / (1024 * 1024)).toFixed(1)} MB`}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="text.secondary" gutterBottom variant="body2">
+                    Collections
+                  </Typography>
+                  <Typography variant="h6">
+                    {dbStatus.collections || 'N/A'}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="text.secondary" gutterBottom variant="body2">
+                    Indexes
+                  </Typography>
+                  <Typography variant="h6">
+                    {dbStatus.indexes || 'N/A'}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="text.secondary" gutterBottom variant="body2">
+                    Avg Object Size
+                  </Typography>
+                  <Typography variant="h6">
+                    {`${(dbStatus.avgObjSize / 1024).toFixed(1)} KB`}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography color="text.secondary" gutterBottom variant="body2">
+                    Last Update
+                  </Typography>
+                  <Typography variant="body2">
+                    {dbStatus.lastUpdated?.run?.run?.updated_at ? 
+                      formatDistanceToNow(new Date(dbStatus.lastUpdated.run.run.updated_at), { addSuffix: true }) : 'N/A'}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        ) : (
+          <Typography color="text.secondary">
+            Loading database status...
+          </Typography>
+        )}
+      </Paper>
+
       {rateLimits && (
         <Paper sx={{ p: 2, mb: 3 }}>
           <Typography variant="h6" gutterBottom>
