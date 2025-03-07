@@ -17,10 +17,17 @@ export const getAllWorkflowRuns = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 30;
+    const searchQuery = req.query.search || '';
     const skip = (page - 1) * pageSize;
 
-    // First get distinct repositories count for pagination
-    const distinctRepos = await WorkflowRun.distinct('repository.fullName');
+    // Get distinct repositories with search filter if provided
+    let repoQuery = {};
+    if (searchQuery) {
+      repoQuery['repository.fullName'] = { $regex: searchQuery, $options: 'i' };
+    }
+
+    // First get distinct repositories filtered by search
+    const distinctRepos = await WorkflowRun.distinct('repository.fullName', repoQuery);
     const totalCount = distinctRepos.length;
 
     // Get the paginated repositories

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -189,6 +189,7 @@ const BuildHistoryBadge = ({ run }) => {
 const RepositoryIcon = BookIcon;
 
 const Dashboard = () => {
+  const searchInputRef = useRef(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [workflowRuns, setWorkflowRuns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -198,6 +199,7 @@ const Dashboard = () => {
     const saved = localStorage.getItem('dashboardSearchQuery');
     return saved || '';
   });
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
   const [pagination, setPagination] = useState({
     total: 0,
     page: parseInt(searchParams.get('page') || '1', 10),
@@ -218,10 +220,19 @@ const Dashboard = () => {
     setSearchParams(newSearchParams);
   }, [pagination.page, setSearchParams]);
 
+  // Add debouncing for search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const fetchWorkflowRuns = async () => {
     try {
       setLoading(true);
-      const response = await apiService.getWorkflowRuns(pagination.page, pagination.pageSize);
+      const response = await apiService.getWorkflowRuns(pagination.page, pagination.pageSize, debouncedSearchQuery);
       setWorkflowRuns(response.data);
       setPagination(prev => ({
         ...prev,
@@ -238,7 +249,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchWorkflowRuns();
-  }, [pagination.page, pagination.pageSize]);
+  }, [pagination.page, pagination.pageSize, debouncedSearchQuery]);
 
   useEffect(() => {
     // Set up real-time updates with socket.io
@@ -299,6 +310,16 @@ const Dashboard = () => {
     };
   }, [pagination.page, pagination.pageSize]);
 
+  // Add effect to focus search input when loading completes
+  useEffect(() => {
+    if (!loading && searchQuery && searchInputRef.current) {
+      searchInputRef.current.focus();
+      // Place cursor at the end of the text
+      const length = searchInputRef.current.value.length;
+      searchInputRef.current.setSelectionRange(length, length);
+    }
+  }, [loading, searchQuery]);
+
   // Group workflows by organization and repository
   const groupedWorkflows = React.useMemo(() => {
     const groups = {};
@@ -357,55 +378,8 @@ const Dashboard = () => {
     return groups;
   }, [workflowRuns]);
 
-  // Filter repositories based on search query
-  const filteredGroupedWorkflows = useMemo(() => {
-    const groups = {};
-    workflowRuns.forEach(workflow => {
-      const [orgName, repoShortName] = workflow.repository.fullName.split('/');
-      const repoKey = workflow.repository.fullName;
-      const workflowKey = workflow.workflow.name;
-      
-      // Only include repositories that match the search query
-      if (searchQuery && !repoKey.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return;
-      }
-
-      if (!groups[orgName]) {
-        groups[orgName] = {
-          repositories: {}
-        };
-      }
-      
-      if (!groups[orgName].repositories[repoKey]) {
-        groups[orgName].repositories[repoKey] = {
-          workflows: {},
-          repoShortName
-        };
-      }
-      
-      if (!groups[orgName].repositories[repoKey].workflows[workflowKey]) {
-        groups[orgName].repositories[repoKey].workflows[workflowKey] = {
-          runs: [],
-          history: []
-        };
-      }
-      
-      const workflowGroup = groups[orgName].repositories[repoKey].workflows[workflowKey];
-      workflowGroup.runs.push(workflow);
-      
-      if (workflow.run.status === 'completed' && 
-          !workflowGroup.history.some(h => h.id === workflow.run.id)) {
-        workflowGroup.history.unshift({
-          id: workflow.run.id,
-          conclusion: workflow.run.conclusion
-        });
-        if (workflowGroup.history.length > 5) {
-          workflowGroup.history.pop();
-        }
-      }
-    });
-    return groups;
-  }, [workflowRuns, searchQuery]);
+  // Remove client-side filtering since it's now handled by the server
+  const filteredGroupedWorkflows = groupedWorkflows;
 
   const paginatedGroupedWorkflows = useMemo(() => {
     const allOrgs = Object.entries(filteredGroupedWorkflows);
@@ -433,8 +407,13 @@ const Dashboard = () => {
   const handleClearSearch = () => {
     setSearchQuery('');
     localStorage.removeItem('dashboardSearchQuery');
-    // Reset to first page when clearing search
     setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    localStorage.setItem('dashboardSearchQuery', value);
   };
 
   const handlePageChange = (_, newPage) => {
@@ -498,10 +477,11 @@ const Dashboard = () => {
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TextField
+              inputRef={searchInputRef}
               size="small"
               placeholder="Search repositories..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
               sx={{ width: 250 }}
               InputProps={{
                 startAdornment: (
