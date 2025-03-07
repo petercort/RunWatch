@@ -22,7 +22,10 @@ import {
   InputAdornment,
   Select,
   MenuItem,
-  Pagination
+  Pagination,
+  FormControl,
+  InputLabel,
+  ListSubheader,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -190,6 +193,21 @@ const BuildHistoryBadge = ({ run }) => {
 
 const RepositoryIcon = BookIcon;
 
+const STATUS_OPTIONS = [
+  { label: 'All Status', value: 'all' },
+  { label: 'Active States', type: 'group' },
+  { label: 'In Progress', value: 'in_progress' },
+  { label: 'Queued', value: 'queued' },
+  { label: 'Waiting', value: 'waiting' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Completed States', type: 'group' },
+  { label: 'Success', value: 'success', isConclusion: true },
+  { label: 'Failure', value: 'failure', isConclusion: true },
+  { label: 'Cancelled', value: 'cancelled', isConclusion: true },
+  { label: 'Timed Out', value: 'timed_out', isConclusion: true },
+  { label: 'Skipped', value: 'skipped', isConclusion: true }
+];
+
 const Dashboard = () => {
   const searchInputRef = useRef(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -209,6 +227,7 @@ const Dashboard = () => {
     totalPages: 1
   });
   const [buildMetrics, setBuildMetrics] = useState({});
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const pageSizeOptions = [30, 50, 100];
   const navigate = useNavigate();
@@ -382,7 +401,54 @@ const Dashboard = () => {
   }, [workflowRuns]);
 
   // Remove client-side filtering since it's now handled by the server
-  const filteredGroupedWorkflows = groupedWorkflows;
+  const filteredGroupedWorkflows = useMemo(() => {
+    const filtered = {};
+    
+    Object.entries(groupedWorkflows).forEach(([orgName, orgData]) => {
+      filtered[orgName] = {
+        repositories: {}
+      };
+      
+      Object.entries(orgData.repositories).forEach(([repoKey, repoData]) => {
+        const filteredWorkflows = {};
+        
+        Object.entries(repoData.workflows).forEach(([workflowKey, workflowData]) => {
+          const filteredRuns = workflowData.runs.filter(workflow => {
+            if (statusFilter === 'all') return true;
+            
+            const selectedOption = STATUS_OPTIONS.find(opt => opt.value === statusFilter);
+            if (!selectedOption) return true;
+            
+            if (selectedOption.isConclusion) {
+              return workflow.run.status === 'completed' && workflow.run.conclusion === statusFilter;
+            }
+            
+            return workflow.run.status === statusFilter;
+          });
+          
+          if (filteredRuns.length > 0) {
+            filteredWorkflows[workflowKey] = {
+              ...workflowData,
+              runs: filteredRuns
+            };
+          }
+        });
+        
+        if (Object.keys(filteredWorkflows).length > 0) {
+          filtered[orgName].repositories[repoKey] = {
+            ...repoData,
+            workflows: filteredWorkflows
+          };
+        }
+      });
+      
+      if (Object.keys(filtered[orgName].repositories).length === 0) {
+        delete filtered[orgName];
+      }
+    });
+    
+    return filtered;
+  }, [groupedWorkflows, statusFilter]);
 
   const paginatedGroupedWorkflows = useMemo(() => {
     const allOrgs = Object.entries(filteredGroupedWorkflows);
@@ -432,6 +498,11 @@ const Dashboard = () => {
       page: 1,
       totalPages: Math.ceil(prev.total / newPageSize)
     }));
+  };
+
+  const handleStatusFilterChange = (event) => {
+    setStatusFilter(event.target.value);
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   // Add function to calculate active and queued builds for each org
@@ -645,6 +716,64 @@ const Dashboard = () => {
               ))}
             </Select>
           </Box>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel sx={{ color: '#8B949E' }}>Status</InputLabel>
+            <Select
+              value={statusFilter}
+              onChange={handleStatusFilterChange}
+              label="Status"
+              sx={{ 
+                color: '#E6EDF3',
+                '.MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'rgba(240, 246, 252, 0.1)'
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'rgba(240, 246, 252, 0.2)'
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#58A6FF'
+                },
+                '.MuiSelect-icon': {
+                  color: '#8B949E'
+                }
+              }}
+              MenuProps={{
+                PaperProps: {
+                  sx: {
+                    bgcolor: '#161B22',
+                    border: '1px solid rgba(240, 246, 252, 0.1)',
+                    '& .MuiMenuItem-root': {
+                      color: '#E6EDF3',
+                      '&:hover': {
+                        bgcolor: 'rgba(88, 166, 255, 0.1)'
+                      },
+                      '&.Mui-selected': {
+                        bgcolor: 'rgba(88, 166, 255, 0.15)',
+                        '&:hover': {
+                          bgcolor: 'rgba(88, 166, 255, 0.25)'
+                        }
+                      }
+                    },
+                    '& .MuiListSubheader-root': {
+                      color: '#8B949E',
+                      bgcolor: '#161B22',
+                      lineHeight: '32px'
+                    }
+                  }
+                }
+              }}
+            >
+              {STATUS_OPTIONS.map(option => (
+                option.type === 'group' ? (
+                  <ListSubheader key={option.label}>{option.label}</ListSubheader>
+                ) : (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                )
+              ))}
+            </Select>
+          </FormControl>
           <Tooltip title="Refresh">
             <IconButton 
               onClick={fetchWorkflowRuns}
