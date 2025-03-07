@@ -40,7 +40,12 @@ const WorkflowHistory = () => {
   const [workflowRuns, setWorkflowRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [page, setPage] = useState(0);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 0,
+    pageSize: ITEMS_PER_PAGE,
+    totalPages: 1
+  });
   const [stats, setStats] = useState(null);
 
   const calculateStats = (runs) => {
@@ -133,16 +138,23 @@ const WorkflowHistory = () => {
     const fetchWorkflowHistory = async () => {
       try {
         setLoading(true);
-        const allWorkflows = await apiService.getWorkflowRuns();
-        const filteredRuns = allWorkflows
-          .filter(wf => 
-            wf.repository.fullName === decodeURIComponent(repoName) && 
-            wf.workflow.name === decodeURIComponent(workflowName)
-          )
-          .sort((a, b) => new Date(b.run.created_at) - new Date(a.run.created_at));
-
+        const response = await apiService.getRepoWorkflowRuns(
+          decodeURIComponent(repoName),
+          pagination.page + 1,
+          pagination.pageSize
+        );
+        
+        const filteredRuns = response.data.filter(wf => 
+          wf.workflow.name === decodeURIComponent(workflowName)
+        );
+        
         setWorkflowRuns(filteredRuns);
         setStats(calculateStats(filteredRuns));
+        setPagination(prev => ({
+          ...prev,
+          ...response.pagination,
+          page: response.pagination.page - 1 // Convert to 0-based for MUI pagination
+        }));
       } catch (err) {
         setError('Failed to fetch workflow history. Please try again later.');
         console.error(err);
@@ -152,7 +164,7 @@ const WorkflowHistory = () => {
     };
 
     fetchWorkflowHistory();
-  }, [repoName, workflowName]);
+  }, [repoName, workflowName, pagination.page, pagination.pageSize]);
 
   if (loading) {
     return (
@@ -179,8 +191,8 @@ const WorkflowHistory = () => {
   }
 
   const displayedRuns = workflowRuns.slice(
-    page * ITEMS_PER_PAGE,
-    (page + 1) * ITEMS_PER_PAGE
+    pagination.page * ITEMS_PER_PAGE,
+    (pagination.page + 1) * ITEMS_PER_PAGE
   );
 
   return (
@@ -402,11 +414,11 @@ const WorkflowHistory = () => {
             </TableContainer>
             <TablePagination
               component="div"
-              count={workflowRuns.length}
-              page={page}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              rowsPerPage={ITEMS_PER_PAGE}
-              rowsPerPageOptions={[ITEMS_PER_PAGE]}
+              count={pagination.total}
+              page={pagination.page}
+              onPageChange={(_, newPage) => setPagination(prev => ({ ...prev, page: newPage }))}
+              rowsPerPage={pagination.pageSize}
+              rowsPerPageOptions={[pagination.pageSize]}
               sx={{
                 color: '#8B949E',
                 '.MuiTablePagination-select': {

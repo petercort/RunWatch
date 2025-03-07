@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -17,7 +17,12 @@ import {
   Collapse,
   Stack,
   Link,
-  SvgIcon
+  SvgIcon,
+  TextField,
+  InputAdornment,
+  Select,
+  MenuItem,
+  Pagination
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -27,6 +32,8 @@ import {
   GitHub as GitHubIcon,
   RocketLaunch as RocketLaunchIcon,
   Book as BookIcon,
+  Search as SearchIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import apiService from '../../api/apiService';
 import { setupSocketListeners } from '../../api/socketService';
@@ -182,17 +189,55 @@ const BuildHistoryBadge = ({ run }) => {
 const RepositoryIcon = BookIcon;
 
 const Dashboard = () => {
+  const searchInputRef = useRef(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [workflowRuns, setWorkflowRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expandedWorkflows, setExpandedWorkflows] = useState(new Set());
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const saved = localStorage.getItem('dashboardSearchQuery');
+    return saved || '';
+  });
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: parseInt(searchParams.get('page') || '1', 10),
+    pageSize: parseInt(localStorage.getItem('dashboardPageSize') || '30', 10),
+    totalPages: 1
+  });
+
+  const pageSizeOptions = [30, 50, 100];
   const navigate = useNavigate();
+
+  useEffect(() => {
+    localStorage.setItem('dashboardPageSize', pagination.pageSize.toString());
+  }, [pagination.pageSize]);
+
+  useEffect(() => {
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.set('page', pagination.page.toString());
+    setSearchParams(newSearchParams);
+  }, [pagination.page, setSearchParams]);
+
+  // Add debouncing for search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const fetchWorkflowRuns = async () => {
     try {
       setLoading(true);
-      const data = await apiService.getWorkflowRuns();
-      setWorkflowRuns(data);
+      const response = await apiService.getWorkflowRuns(pagination.page, pagination.pageSize, debouncedSearchQuery);
+      setWorkflowRuns(response.data);
+      setPagination(prev => ({
+        ...prev,
+        ...response.pagination
+      }));
       setError(null);
     } catch (err) {
       setError('Failed to fetch workflow runs. Please try again later.');
@@ -204,30 +249,45 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchWorkflowRuns();
+  }, [pagination.page, pagination.pageSize, debouncedSearchQuery]);
 
+  useEffect(() => {
     // Set up real-time updates with socket.io
     const cleanupListeners = setupSocketListeners({
       onNewWorkflow: (newWorkflow) => {
         setWorkflowRuns(prev => {
+          // Only add new workflow if we're on the first page
+          if (pagination.page !== 1) return prev;
+          
           // Check if workflow already exists
           const exists = prev.some(workflow => workflow.run.id === newWorkflow.run.id);
           if (exists) {
-            // Update existing workflow
             return prev.map(workflow =>
               workflow.run.id === newWorkflow.run.id ? newWorkflow : workflow
             );
           }
-          // Add new workflow if it doesn't exist
-          return [newWorkflow, ...prev];
+          
+          // Add new workflow if we haven't reached page size
+          if (prev.length < pagination.pageSize) {
+            return [newWorkflow, ...prev];
+          }
+          
+          // Otherwise, just keep current state
+          return prev;
         });
+        
+        // Update total count
+        setPagination(prev => ({
+          ...prev,
+          total: prev.total + 1,
+          totalPages: Math.ceil((prev.total + 1) / prev.pageSize)
+        }));
       },
       onWorkflowUpdate: (updatedWorkflow) => {
         setWorkflowRuns(prev => {
-          // If workflow doesn't exist in list, don't add it
           if (!prev.some(workflow => workflow.run.id === updatedWorkflow.run.id)) {
             return prev;
           }
-          // Update existing workflow
           return prev.map(workflow =>
             workflow.run.id === updatedWorkflow.run.id ? updatedWorkflow : workflow
           );
@@ -235,11 +295,9 @@ const Dashboard = () => {
       },
       onJobsUpdate: (workflowWithJobs) => {
         setWorkflowRuns(prev => {
-          // If workflow doesn't exist in list, don't add it
           if (!prev.some(workflow => workflow.run.id === workflowWithJobs.run.id)) {
             return prev;
           }
-          // Update existing workflow
           return prev.map(workflow =>
             workflow.run.id === workflowWithJobs.run.id ? workflowWithJobs : workflow
           );
@@ -250,7 +308,17 @@ const Dashboard = () => {
     return () => {
       cleanupListeners();
     };
-  }, []);
+  }, [pagination.page, pagination.pageSize]);
+
+  // Add effect to focus search input when loading completes
+  useEffect(() => {
+    if (!loading && searchQuery && searchInputRef.current) {
+      searchInputRef.current.focus();
+      // Place cursor at the end of the text
+      const length = searchInputRef.current.value.length;
+      searchInputRef.current.setSelectionRange(length, length);
+    }
+  }, [loading, searchQuery]);
 
   // Group workflows by organization and repository
   const groupedWorkflows = React.useMemo(() => {
@@ -310,6 +378,20 @@ const Dashboard = () => {
     return groups;
   }, [workflowRuns]);
 
+  // Remove client-side filtering since it's now handled by the server
+  const filteredGroupedWorkflows = groupedWorkflows;
+
+  const paginatedGroupedWorkflows = useMemo(() => {
+    const allOrgs = Object.entries(filteredGroupedWorkflows);
+    const totalRepos = pagination.total; // Use server-provided total
+    
+    return {
+      groups: filteredGroupedWorkflows,
+      totalPages: pagination.totalPages,
+      totalRepos
+    };
+  }, [filteredGroupedWorkflows, pagination]);
+
   const toggleWorkflowHistory = (workflowKey) => {
     setExpandedWorkflows(prev => {
       const newSet = new Set(prev);
@@ -320,6 +402,33 @@ const Dashboard = () => {
       }
       return newSet;
     });
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    localStorage.removeItem('dashboardSearchQuery');
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    localStorage.setItem('dashboardSearchQuery', value);
+  };
+
+  const handlePageChange = (_, newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+    window.scrollTo(0, 0);
+  };
+
+  const handlePageSizeChange = (event) => {
+    const newPageSize = parseInt(event.target.value, 10);
+    setPagination(prev => ({
+      ...prev,
+      pageSize: newPageSize,
+      page: 1,
+      totalPages: Math.ceil(prev.total / newPageSize)
+    }));
   };
 
   if (loading) {
@@ -365,22 +474,73 @@ const Dashboard = () => {
         }}>
           Organizations
         </Typography>
-        <Tooltip title="Refresh">
-          <IconButton 
-            onClick={fetchWorkflowRuns}
-            sx={{ 
-              color: '#58A6FF',
-              '&:hover': {
-                bgcolor: 'rgba(88, 166, 255, 0.1)'
-              }
-            }}
-          >
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextField
+              inputRef={searchInputRef}
+              size="small"
+              placeholder="Search repositories..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+              sx={{ width: 250 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={handleClearSearch}
+                      sx={{ color: '#8B949E' }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              }}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Select
+              size="small"
+              value={pagination.pageSize}
+              onChange={handlePageSizeChange}
+              sx={{ 
+                minWidth: 100,
+                color: '#E6EDF3',
+                '.MuiSelect-select': { py: 0.75 },
+                '.MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'rgba(240, 246, 252, 0.1)'
+                }
+              }}
+            >
+              {pageSizeOptions.map(size => (
+                <MenuItem key={size} value={size}>
+                  {size} per page
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
+          <Tooltip title="Refresh">
+            <IconButton 
+              onClick={fetchWorkflowRuns}
+              sx={{ 
+                color: '#58A6FF',
+                '&:hover': {
+                  bgcolor: 'rgba(88, 166, 255, 0.1)'
+                }
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
 
-      {Object.entries(groupedWorkflows).length === 0 ? (
+      {Object.entries(paginatedGroupedWorkflows.groups).length === 0 ? (
         <Box sx={{
           textAlign: 'center',
           py: 8,
@@ -389,248 +549,296 @@ const Dashboard = () => {
           border: '1px solid rgba(88, 166, 255, 0.1)'
         }}>
           <Typography variant="body1" color="#8B949E">
-            No workflow runs found. Waiting for GitHub webhook events...
+            {searchQuery 
+              ? 'No repositories match your search criteria.'
+              : 'No workflow runs found. Waiting for GitHub webhook events...'}
           </Typography>
         </Box>
       ) : (
-        <Stack spacing={4}>
-          {Object.entries(groupedWorkflows).map(([orgName, orgData]) => (
-            <Paper 
-              key={orgName} 
-              elevation={0}
-              sx={{ 
-                overflow: 'hidden',
-                bgcolor: '#161B22',
-                borderRadius: '12px',
-                border: '1px solid rgba(240, 246, 252, 0.1)'
+        <>
+          <Stack spacing={4}>
+            {Object.entries(paginatedGroupedWorkflows.groups).map(([orgName, orgData]) => (
+              <Paper 
+                key={orgName} 
+                elevation={0}
+                sx={{ 
+                  overflow: 'hidden',
+                  bgcolor: '#161B22',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(240, 246, 252, 0.1)'
+                }}
+              >
+                {/* Organization Header */}
+                <Box sx={{
+                  p: 3,
+                  borderBottom: '1px solid rgba(240, 246, 252, 0.1)',
+                  background: 'linear-gradient(90deg, rgba(88, 166, 255, 0.1) 0%, rgba(88, 166, 255, 0.05) 100%)',
+                }}>
+                  <Typography 
+                    variant="h5" 
+                    sx={{ 
+                      color: '#E6EDF3',
+                      fontWeight: 600,
+                      fontSize: '1.25rem'
+                    }}
+                  >
+                    {orgName}
+                  </Typography>
+                </Box>
+
+                {/* Repositories Section */}
+                <Box sx={{ p: 3 }}>
+                  <Stack spacing={3}>
+                    {Object.entries(orgData.repositories).map(([repoKey, repoData]) => (
+                      <Paper
+                        key={repoKey}
+                        elevation={0}
+                        sx={{
+                          bgcolor: 'rgba(13, 17, 23, 0.3)',
+                          borderRadius: '12px',
+                          border: '1px solid rgba(240, 246, 252, 0.1)',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {/* Repository Header */}
+                        <Box sx={{
+                          p: 2.5,
+                          borderBottom: '1px solid rgba(240, 246, 252, 0.1)',
+                        }}>
+                          <Typography 
+                            onClick={() => navigate(`/repository/${encodeURIComponent(repoKey)}`)}
+                            sx={{ 
+                              color: '#E6EDF3',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              '&:hover': {
+                                color: '#58A6FF'
+                              }
+                            }}
+                          >
+                            <RepositoryIcon sx={{ fontSize: '1.2rem', color: '#58A6FF' }} />
+                            {repoData.repoShortName}
+                          </Typography>
+                        </Box>
+
+                        {/* Workflows */}
+                        <Box sx={{ p: 2.5 }}>
+                          <Grid 
+                            container 
+                            spacing={2}
+                            columns={{ xs: 4, sm: 8, md: 12, lg: 16, xl: 40 }}
+                            sx={{
+                              display: 'grid',
+                              gridTemplateColumns: {
+                                xs: 'repeat(1, 1fr)',
+                                sm: 'repeat(2, 1fr)',
+                                md: 'repeat(3, 1fr)',
+                                lg: 'repeat(4, 1fr)',
+                                xl: 'repeat(10, 1fr)'
+                              },
+                              gap: 2,
+                            }}
+                          > 
+                            {Object.entries(repoData.workflows).map(([workflowKey, workflowData]) => (
+                              <Box
+                                key={workflowKey}
+                                sx={{ 
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 2,
+                                  p: 2,
+                                  borderRadius: 1,
+                                  bgcolor: 'rgba(13, 17, 23, 0.5)',
+                                  border: '1px solid rgba(240, 246, 252, 0.05)',
+                                  height: '140px',
+                                  width: '100%',
+                                  minWidth: '200px',
+                                  maxWidth: '100%',
+                                  overflow: 'hidden',
+                                  position: 'relative',
+                                }}
+                              >
+                                <Box sx={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  width: '100%',
+                                  mb: 1
+                                }}>
+                                  <Typography 
+                                    onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoKey)}/${encodeURIComponent(workflowKey)}`)}
+                                    sx={{ 
+                                      color: '#E6EDF3', 
+                                      fontWeight: 500,
+                                      cursor: 'pointer',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      flex: 1,
+                                      minWidth: 0,
+                                      '&:hover': {
+                                        color: '#58A6FF',
+                                      }
+                                    }}
+                                  >
+                                    {workflowKey}
+                                  </Typography>
+
+                                  <Stack 
+                                    direction="row" 
+                                    spacing={2} 
+                                    sx={{ 
+                                      ml: 2,
+                                      alignItems: 'center'
+                                    }}
+                                  >
+                                    <Tooltip title="Total builds">
+                                      <Box sx={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center',
+                                        color: '#8B949E',
+                                        fontSize: '0.75rem',
+                                        '& svg': { fontSize: '0.875rem', mr: 0.5 }
+                                      }}>
+                                        <RocketLaunchIcon />
+                                        {workflowData.runs.length}
+                                      </Box>
+                                    </Tooltip>
+
+                                    <Tooltip title="Average duration">
+                                      <Box sx={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center',
+                                        color: '#8B949E',
+                                        fontSize: '0.75rem',
+                                        '& svg': { fontSize: '0.875rem', mr: 0.5 }
+                                      }}>
+                                        <ScheduleIcon />
+                                        {(() => {
+                                          const completedRuns = workflowData.runs.filter(w => w.run.status === 'completed');
+                                          if (completedRuns.length === 0) return '-';
+                                          const totalDuration = completedRuns.reduce((acc, w) => {
+                                            const start = new Date(w.run.created_at);
+                                            const end = new Date(w.run.updated_at);
+                                            return acc + (end - start);
+                                          }, 0);
+                                          const avgDuration = totalDuration / completedRuns.length;
+                                          return formatDuration(new Date(), new Date(new Date().getTime() + avgDuration));
+                                        })()}
+                                      </Box>
+                                    </Tooltip>
+                                  </Stack>
+                                </Box>
+                                
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  flexWrap: 'nowrap',
+                                  alignItems: 'center',
+                                  gap: 0.5,
+                                  py: 0.5,
+                                  px: 1,
+                                  borderRadius: '8px',
+                                  border: '1px solid rgba(240, 246, 252, 0.05)',
+                                  minHeight: '36px',
+                                  height: '36px',
+                                  flex: 1,
+                                  position: 'relative',
+                                  boxSizing: 'border-box',
+                                  overflow: 'hidden',
+                                  '&:hover': {
+                                    borderColor: 'rgba(240, 246, 252, 0.1)'
+                                  }
+                                }}>
+                                  {workflowData.runs.slice(0, 10).reverse().map((workflow, index) => {
+                                    const run = {
+                                      ...workflow.run,
+                                      id: workflow.run.id.toString()
+                                    };
+                                    return (
+                                      <Box
+                                        key={workflow.run.id}
+                                        sx={{
+                                          position: 'relative',
+                                          '&::after': index === 0 ? {
+                                            content: '""',
+                                            position: 'absolute',
+                                            top: -12,
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            width: 0,
+                                            height: 0,
+                                            borderLeft: '4px solid transparent',
+                                            borderRight: '4px solid transparent',
+                                            borderTop: '4px solid #58A6FF',
+                                          } : undefined
+                                        }}
+                                      >
+                                        <BuildHistoryBadge
+                                          run={run}
+                                        />
+                                      </Box>
+                                    );
+                                  })}
+                                </Box>
+                              </Box>
+                            ))}
+                          </Grid>
+                        </Box>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </Box>
+              </Paper>
+            ))}
+          </Stack>
+
+          {/* Pagination controls */}
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'center',
+            mt: 4,
+            pt: 4,
+            borderTop: '1px solid rgba(240, 246, 252, 0.1)'
+          }}>
+            <Pagination 
+              page={pagination.page}
+              count={paginatedGroupedWorkflows.totalPages}
+              onChange={handlePageChange}
+              color="primary"
+              size="large"
+              showFirstButton
+              showLastButton
+              sx={{
+                '.MuiPaginationItem-root': {
+                  color: '#E6EDF3',
+                  '&.Mui-selected': {
+                    bgcolor: 'rgba(88, 166, 255, 0.2)',
+                    '&:hover': {
+                      bgcolor: 'rgba(88, 166, 255, 0.3)'
+                    }
+                  },
+                  '&:hover': {
+                    bgcolor: 'rgba(88, 166, 255, 0.1)'
+                  }
+                }
               }}
-            >
-              {/* Organization Header */}
-              <Box sx={{
-                p: 3,
-                borderBottom: '1px solid rgba(240, 246, 252, 0.1)',
-                background: 'linear-gradient(90deg, rgba(88, 166, 255, 0.1) 0%, rgba(88, 166, 255, 0.05) 100%)',
-              }}>
-                <Typography 
-                  variant="h5" 
-                  sx={{ 
-                    color: '#E6EDF3',
-                    fontWeight: 600,
-                    fontSize: '1.25rem'
-                  }}
-                >
-                  {orgName}
-                </Typography>
-              </Box>
-
-              {/* Repositories Section */}
-              <Box sx={{ p: 3 }}>
-                <Stack spacing={3}>
-                  {Object.entries(orgData.repositories).map(([repoKey, repoData]) => (
-                    <Paper
-                      key={repoKey}
-                      elevation={0}
-                      sx={{
-                        bgcolor: 'rgba(13, 17, 23, 0.3)',
-                        borderRadius: '12px',
-                        border: '1px solid rgba(240, 246, 252, 0.1)',
-                        overflow: 'hidden'
-                      }}
-                    >
-                      {/* Repository Header */}
-                      <Box sx={{
-                        p: 2.5,
-                        borderBottom: '1px solid rgba(240, 246, 252, 0.1)',
-                      }}>
-                        <Typography 
-                          onClick={() => navigate(`/repository/${encodeURIComponent(repoKey)}`)}
-                          sx={{ 
-                            color: '#E6EDF3',
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            '&:hover': {
-                              color: '#58A6FF'
-                            }
-                          }}
-                        >
-                          <RepositoryIcon sx={{ fontSize: '1.2rem', color: '#58A6FF' }} />
-                          {repoData.repoShortName}
-                        </Typography>
-                      </Box>
-
-                      {/* Workflows */}
-                      <Box sx={{ p: 2.5 }}>
-                        <Grid 
-                          container 
-                          spacing={2}
-                          columns={{ xs: 4, sm: 8, md: 12, lg: 16, xl: 40 }}
-                          sx={{
-                            display: 'grid',
-                            gridTemplateColumns: {
-                              xs: 'repeat(1, 1fr)',
-                              sm: 'repeat(2, 1fr)',
-                              md: 'repeat(3, 1fr)',
-                              lg: 'repeat(4, 1fr)',
-                              xl: 'repeat(10, 1fr)'
-                            },
-                            gap: 2,
-                          }}
-                        > 
-                          {Object.entries(repoData.workflows).map(([workflowKey, workflowData]) => (
-                            <Box
-                              key={workflowKey}
-                              sx={{ 
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 2,
-                                p: 2,
-                                borderRadius: 1,
-                                bgcolor: 'rgba(13, 17, 23, 0.5)',
-                                border: '1px solid rgba(240, 246, 252, 0.05)',
-                                height: '140px',
-                                width: '100%',
-                                minWidth: '200px',
-                                maxWidth: '100%',
-                                overflow: 'hidden',
-                                position: 'relative',
-                              }}
-                            >
-                              <Box sx={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                width: '100%',
-                                mb: 1
-                              }}>
-                                <Typography 
-                                  onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoKey)}/${encodeURIComponent(workflowKey)}`)}
-                                  sx={{ 
-                                    color: '#E6EDF3', 
-                                    fontWeight: 500,
-                                    cursor: 'pointer',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    flex: 1,
-                                    minWidth: 0,
-                                    '&:hover': {
-                                      color: '#58A6FF',
-                                    }
-                                  }}
-                                >
-                                  {workflowKey}
-                                </Typography>
-
-                                <Stack 
-                                  direction="row" 
-                                  spacing={2} 
-                                  sx={{ 
-                                    ml: 2,
-                                    alignItems: 'center'
-                                  }}
-                                >
-                                  <Tooltip title="Total builds">
-                                    <Box sx={{ 
-                                      display: 'flex', 
-                                      alignItems: 'center',
-                                      color: '#8B949E',
-                                      fontSize: '0.75rem',
-                                      '& svg': { fontSize: '0.875rem', mr: 0.5 }
-                                    }}>
-                                      <RocketLaunchIcon />
-                                      {workflowData.runs.length}
-                                    </Box>
-                                  </Tooltip>
-
-                                  <Tooltip title="Average duration">
-                                    <Box sx={{ 
-                                      display: 'flex', 
-                                      alignItems: 'center',
-                                      color: '#8B949E',
-                                      fontSize: '0.75rem',
-                                      '& svg': { fontSize: '0.875rem', mr: 0.5 }
-                                    }}>
-                                      <ScheduleIcon />
-                                      {(() => {
-                                        const completedRuns = workflowData.runs.filter(w => w.run.status === 'completed');
-                                        if (completedRuns.length === 0) return '-';
-                                        const totalDuration = completedRuns.reduce((acc, w) => {
-                                          const start = new Date(w.run.created_at);
-                                          const end = new Date(w.run.updated_at);
-                                          return acc + (end - start);
-                                        }, 0);
-                                        const avgDuration = totalDuration / completedRuns.length;
-                                        return formatDuration(new Date(), new Date(new Date().getTime() + avgDuration));
-                                      })()}
-                                    </Box>
-                                  </Tooltip>
-                                </Stack>
-                              </Box>
-                              
-                              <Box sx={{ 
-                                display: 'flex', 
-                                flexWrap: 'nowrap',
-                                alignItems: 'center',
-                                gap: 0.5,
-                                py: 0.5,
-                                px: 1,
-                                borderRadius: '8px',
-                                border: '1px solid rgba(240, 246, 252, 0.05)',
-                                minHeight: '36px',
-                                height: '36px',
-                                flex: 1,
-                                position: 'relative',
-                                boxSizing: 'border-box',
-                                overflow: 'hidden',
-                                '&:hover': {
-                                  borderColor: 'rgba(240, 246, 252, 0.1)'
-                                }
-                              }}>
-                                {workflowData.runs.slice(0, 10).reverse().map((workflow, index) => {
-                                  const run = {
-                                    ...workflow.run,
-                                    id: workflow.run.id.toString()
-                                  };
-                                  return (
-                                    <Box
-                                      key={workflow.run.id}
-                                      sx={{
-                                        position: 'relative',
-                                        '&::after': index === 0 ? {
-                                          content: '""',
-                                          position: 'absolute',
-                                          top: -12,
-                                          left: '50%',
-                                          transform: 'translateX(-50%)',
-                                          width: 0,
-                                          height: 0,
-                                          borderLeft: '4px solid transparent',
-                                          borderRight: '4px solid transparent',
-                                          borderTop: '4px solid #58A6FF',
-                                        } : undefined
-                                      }}
-                                    >
-                                      <BuildHistoryBadge
-                                        run={run}
-                                      />
-                                    </Box>
-                                  );
-                                })}
-                              </Box>
-                            </Box>
-                          ))}
-                        </Grid>
-                      </Box>
-                    </Paper>
-                  ))}
-                </Stack>
-              </Box>
-            </Paper>
-          ))}
-        </Stack>
+            />
+          </Box>
+          
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              textAlign: 'center', 
+              mt: 2,
+              color: '#8B949E'
+            }}
+          >
+            Showing {Math.min((pagination.page - 1) * pagination.pageSize + 1, paginatedGroupedWorkflows.totalRepos)} - {Math.min(pagination.page * pagination.pageSize, paginatedGroupedWorkflows.totalRepos)} of {paginatedGroupedWorkflows.totalRepos} repositories
+          </Typography>
+        </>
       )}
     </Box>
   );

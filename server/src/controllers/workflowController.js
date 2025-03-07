@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import WorkflowRun from '../models/WorkflowRun.js';
 import { successResponse, errorResponse } from '../utils/responseHandler.js';
 import * as workflowService from '../services/workflowService.js';
@@ -14,8 +15,38 @@ export const handleWorkflowRun = async (req, res) => {
 
 export const getAllWorkflowRuns = async (req, res) => {
   try {
-    const workflowRuns = await WorkflowRun.find().sort({ 'run.created_at': -1 });
-    return successResponse(res, workflowRuns);
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 30;
+    const searchQuery = req.query.search || '';
+    const skip = (page - 1) * pageSize;
+
+    // Get distinct repositories with search filter if provided
+    let repoQuery = {};
+    if (searchQuery) {
+      repoQuery['repository.fullName'] = { $regex: searchQuery, $options: 'i' };
+    }
+
+    // First get distinct repositories filtered by search
+    const distinctRepos = await WorkflowRun.distinct('repository.fullName', repoQuery);
+    const totalCount = distinctRepos.length;
+
+    // Get the paginated repositories
+    const paginatedRepos = distinctRepos.slice(skip, skip + pageSize);
+
+    // Then get workflow runs for these repositories
+    const workflowRuns = await WorkflowRun.find({
+      'repository.fullName': { $in: paginatedRepos }
+    }).sort({ 'run.created_at': -1 });
+
+    return successResponse(res, {
+      data: workflowRuns,
+      pagination: {
+        total: totalCount,
+        page,
+        pageSize,
+        totalPages: Math.ceil(totalCount / pageSize)
+      }
+    });
   } catch (error) {
     return errorResponse(res, 'Error retrieving workflow runs', 500, error);
   }
@@ -24,10 +55,31 @@ export const getAllWorkflowRuns = async (req, res) => {
 export const getRepoWorkflowRuns = async (req, res) => {
   try {
     const { repoName } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 30;
+    const skip = (page - 1) * pageSize;
+
+    // Get total count for pagination
+    const totalCount = await WorkflowRun.countDocuments({
+      'repository.fullName': repoName
+    });
+
     const workflowRuns = await WorkflowRun.find({
-      'repository.name': repoName
-    }).sort({ 'run.created_at': -1 });
-    return successResponse(res, workflowRuns);
+      'repository.fullName': repoName
+    })
+      .sort({ 'run.created_at': -1 })
+      .skip(skip)
+      .limit(pageSize);
+
+    return successResponse(res, {
+      data: workflowRuns,
+      pagination: {
+        total: totalCount,
+        page,
+        pageSize,
+        totalPages: Math.ceil(totalCount / pageSize)
+      }
+    });
   } catch (error) {
     return errorResponse(res, 'Error retrieving repository workflow runs', 500, error);
   }
@@ -56,13 +108,26 @@ export const updateWorkflowJobs = async (req, res) => {
 
 export const getDatabaseStatus = async (req, res) => {
   try {
-    const stats = {
-      totalWorkflows: await WorkflowRun.countDocuments(),
-      lastUpdated: await WorkflowRun.findOne().sort({ 'run.updated_at': -1 }).select('run.updated_at'),
-      storageSize: await WorkflowRun.collection.stats().then(stats => stats.size),
+    const db = mongoose.connection.db;
+    const stats = await db.stats();
+    const lastWorkflowRun = await WorkflowRun.findOne().sort({ 'run.updated_at': -1 });
+    const totalWorkflows = await WorkflowRun.countDocuments();
+
+    const status = {
+      totalWorkflows,
+      lastUpdated: {
+        run: lastWorkflowRun
+      },
+      storageSize: stats.storageSize,
+      dataSize: stats.dataSize,
+      collections: stats.collections,
+      indexes: stats.indexes,
+      avgObjSize: stats.avgObjSize,
+      ok: stats.ok
     };
-    return successResponse(res, stats);
+
+    return successResponse(res, status);
   } catch (error) {
-    return errorResponse(res, 'Error getting database status', 500, error);
+    return errorResponse(res, 'Error retrieving database status', 500, error);
   }
 };

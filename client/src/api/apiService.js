@@ -17,11 +17,12 @@ export const socket = io(WS_URL, {
 // API Services
 const apiService = {
   // Get all workflow runs
-  getWorkflowRuns: async () => {
+  getWorkflowRuns: async (page = 1, pageSize = 30, search = '') => {
     try {
-      console.log('Fetching workflow runs from:', `${API_URL}/workflow-runs`);
-      const response = await axios.get(`${API_URL}/workflow-runs`);
-      return response.data.data || [];
+      const response = await axios.get(`${API_URL}/workflow-runs`, {
+        params: { page, pageSize, search }
+      });
+      return response.data.data || { data: [], pagination: { total: 0, page: 1, pageSize: 30, totalPages: 1 } };
     } catch (error) {
       console.error('Error fetching workflow runs:', error);
       throw error;
@@ -29,10 +30,12 @@ const apiService = {
   },
 
   // Get workflow runs for a specific repository
-  getRepoWorkflowRuns: async (repoName) => {
+  getRepoWorkflowRuns: async (repoName, page = 1, pageSize = 30) => {
     try {
-      const response = await axios.get(`${API_URL}/workflow-runs/repo/${repoName}`);
-      return response.data.data || [];
+      const response = await axios.get(`${API_URL}/workflow-runs/repo/${repoName}`, {
+        params: { page, pageSize }
+      });
+      return response.data.data || { data: [], pagination: { total: 0, page: 1, pageSize: 30, totalPages: 1 } };
     } catch (error) {
       console.error(`Error fetching workflow runs for repo ${repoName}:`, error);
       throw error;
@@ -80,6 +83,17 @@ const apiService = {
       return await response.json();
     } catch (error) {
       console.error('Error syncing GitHub data:', error);
+      throw error;
+    }
+  },
+
+  // Get database status
+  getDatabaseStatus: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/db/status`);
+      return response.data.data || {};
+    } catch (error) {
+      console.error('Error fetching database status:', error);
       throw error;
     }
   },
