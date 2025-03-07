@@ -15,8 +15,31 @@ export const handleWorkflowRun = async (req, res) => {
 
 export const getAllWorkflowRuns = async (req, res) => {
   try {
-    const workflowRuns = await WorkflowRun.find().sort({ 'run.created_at': -1 });
-    return successResponse(res, workflowRuns);
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 30;
+    const skip = (page - 1) * pageSize;
+
+    // First get distinct repositories count for pagination
+    const distinctRepos = await WorkflowRun.distinct('repository.fullName');
+    const totalCount = distinctRepos.length;
+
+    // Get the paginated repositories
+    const paginatedRepos = distinctRepos.slice(skip, skip + pageSize);
+
+    // Then get workflow runs for these repositories
+    const workflowRuns = await WorkflowRun.find({
+      'repository.fullName': { $in: paginatedRepos }
+    }).sort({ 'run.created_at': -1 });
+
+    return successResponse(res, {
+      data: workflowRuns,
+      pagination: {
+        total: totalCount,
+        page,
+        pageSize,
+        totalPages: Math.ceil(totalCount / pageSize)
+      }
+    });
   } catch (error) {
     return errorResponse(res, 'Error retrieving workflow runs', 500, error);
   }
@@ -25,10 +48,31 @@ export const getAllWorkflowRuns = async (req, res) => {
 export const getRepoWorkflowRuns = async (req, res) => {
   try {
     const { repoName } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 30;
+    const skip = (page - 1) * pageSize;
+
+    // Get total count for pagination
+    const totalCount = await WorkflowRun.countDocuments({
+      'repository.fullName': repoName
+    });
+
     const workflowRuns = await WorkflowRun.find({
-      'repository.name': repoName
-    }).sort({ 'run.created_at': -1 });
-    return successResponse(res, workflowRuns);
+      'repository.fullName': repoName
+    })
+      .sort({ 'run.created_at': -1 })
+      .skip(skip)
+      .limit(pageSize);
+
+    return successResponse(res, {
+      data: workflowRuns,
+      pagination: {
+        total: totalCount,
+        page,
+        pageSize,
+        totalPages: Math.ceil(totalCount / pageSize)
+      }
+    });
   } catch (error) {
     return errorResponse(res, 'Error retrieving repository workflow runs', 500, error);
   }

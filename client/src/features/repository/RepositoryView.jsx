@@ -35,6 +35,12 @@ const RepositoryView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    pageSize: 30,
+    totalPages: 1
+  });
 
   const calculateRepoStats = (runs) => {
     if (!runs.length) return null;
@@ -185,15 +191,18 @@ const RepositoryView = () => {
     const fetchRepositoryData = async () => {
       try {
         setLoading(true);
-        const allWorkflows = await apiService.getWorkflowRuns();
-        const repoWorkflows = allWorkflows.filter(wf => 
-          wf.repository.fullName === decodeURIComponent(repoName)
+        const response = await apiService.getRepoWorkflowRuns(
+          decodeURIComponent(repoName),
+          pagination.page,
+          pagination.pageSize
         );
-
+        const repoWorkflows = response.data;
+        
         if (repoWorkflows.length > 0) {
           const repoInfo = repoWorkflows[0].repository;
           setRepository(repoInfo);
           setStats(calculateRepoStats(repoWorkflows));
+          setPagination(response.pagination);
         } else {
           setError('Repository not found');
         }
@@ -206,7 +215,7 @@ const RepositoryView = () => {
     };
 
     fetchRepositoryData();
-  }, [repoName]);
+  }, [repoName, pagination.page, pagination.pageSize]);
 
   if (loading) {
     return (
