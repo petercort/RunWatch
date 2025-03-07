@@ -34,6 +34,8 @@ import {
   Book as BookIcon,
   Search as SearchIcon,
   Close as CloseIcon,
+  PlayArrow as PlayArrowIcon,
+  PendingActions as PendingIcon,
 } from '@mui/icons-material';
 import apiService from '../../api/apiService';
 import { setupSocketListeners } from '../../api/socketService';
@@ -206,6 +208,7 @@ const Dashboard = () => {
     pageSize: parseInt(localStorage.getItem('dashboardPageSize') || '30', 10),
     totalPages: 1
   });
+  const [buildMetrics, setBuildMetrics] = useState({});
 
   const pageSizeOptions = [30, 50, 100];
   const navigate = useNavigate();
@@ -431,6 +434,124 @@ const Dashboard = () => {
     }));
   };
 
+  // Add function to calculate active and queued builds for each org
+  const calculateBuildMetrics = (workflows) => {
+    const metrics = {};
+    workflows.forEach(workflow => {
+      const [orgName] = workflow.repository.fullName.split('/');
+      if (!metrics[orgName]) {
+        metrics[orgName] = {
+          inProgress: 0,
+          queued: 0
+        };
+      }
+      
+      if (workflow.run.status === 'in_progress') {
+        metrics[orgName].inProgress++;
+      } else if (workflow.run.status === 'queued' || workflow.run.status === 'waiting' || workflow.run.status === 'pending') {
+        metrics[orgName].queued++;
+      }
+    });
+    return metrics;
+  };
+
+  // Update build metrics when workflows change
+  useEffect(() => {
+    setBuildMetrics(calculateBuildMetrics(workflowRuns));
+  }, [workflowRuns]);
+
+  // Remove the periodic refresh effect since we'll rely solely on WebSocket updates
+  useEffect(() => {
+    setBuildMetrics(calculateBuildMetrics(workflowRuns));
+  }, [workflowRuns]);
+
+  // Enhanced WebSocket update handler
+  useEffect(() => {
+    const cleanupListeners = setupSocketListeners({
+      onNewWorkflow: (newWorkflow) => {
+        // Update workflow runs only if on first page
+        setWorkflowRuns(prev => {
+          if (pagination.page !== 1) return prev;
+          const exists = prev.some(workflow => workflow.run.id === newWorkflow.run.id);
+          if (exists) {
+            return prev.map(workflow =>
+              workflow.run.id === newWorkflow.run.id ? newWorkflow : workflow
+            );
+          }
+          if (prev.length < pagination.pageSize) {
+            return [newWorkflow, ...prev];
+          }
+          return prev;
+        });
+
+        // Update build metrics independently
+        setBuildMetrics(prev => {
+          const [orgName] = newWorkflow.repository.fullName.split('/');
+          const metrics = { ...prev };
+          if (!metrics[orgName]) {
+            metrics[orgName] = { inProgress: 0, queued: 0 };
+          }
+          
+          // Recalculate metrics for the specific organization
+          const newMetrics = { ...metrics[orgName] };
+          if (newWorkflow.run.status === 'in_progress') {
+            newMetrics.inProgress++;
+          } else if (['queued', 'waiting', 'pending'].includes(newWorkflow.run.status)) {
+            newMetrics.queued++;
+          }
+          
+          return {
+            ...metrics,
+            [orgName]: newMetrics
+          };
+        });
+      },
+      onWorkflowUpdate: (updatedWorkflow) => {
+        const [orgName] = updatedWorkflow.repository.fullName.split('/');
+        
+        // Update workflow runs if it exists in current view
+        setWorkflowRuns(prev => {
+          if (!prev.some(workflow => workflow.run.id === updatedWorkflow.run.id)) {
+            return prev;
+          }
+          return prev.map(workflow => {
+            if (workflow.run.id === updatedWorkflow.run.id) {
+              // If status changed, update build metrics
+              if (workflow.run.status !== updatedWorkflow.run.status) {
+                setBuildMetrics(prevMetrics => {
+                  const metrics = { ...prevMetrics };
+                  if (!metrics[orgName]) {
+                    metrics[orgName] = { inProgress: 0, queued: 0 };
+                  }
+                  
+                  // Decrement old status count
+                  if (workflow.run.status === 'in_progress') {
+                    metrics[orgName].inProgress = Math.max(0, metrics[orgName].inProgress - 1);
+                  } else if (['queued', 'waiting', 'pending'].includes(workflow.run.status)) {
+                    metrics[orgName].queued = Math.max(0, metrics[orgName].queued - 1);
+                  }
+                  
+                  // Increment new status count
+                  if (updatedWorkflow.run.status === 'in_progress') {
+                    metrics[orgName].inProgress++;
+                  } else if (['queued', 'waiting', 'pending'].includes(updatedWorkflow.run.status)) {
+                    metrics[orgName].queued++;
+                  }
+                  
+                  return metrics;
+                });
+              }
+              return updatedWorkflow;
+            }
+            return workflow;
+          });
+        });
+      }
+    });
+
+    return () => cleanupListeners();
+  }, [pagination.page, pagination.pageSize]);
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -573,6 +694,9 @@ const Dashboard = () => {
                   p: 3,
                   borderBottom: '1px solid rgba(240, 246, 252, 0.1)',
                   background: 'linear-gradient(90deg, rgba(88, 166, 255, 0.1) 0%, rgba(88, 166, 255, 0.05) 100%)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
                 }}>
                   <Typography 
                     variant="h5" 
@@ -584,6 +708,40 @@ const Dashboard = () => {
                   >
                     {orgName}
                   </Typography>
+                  <Stack direction="row" spacing={2}>
+                    <Chip
+                      icon={<PlayArrowIcon sx={{ fontSize: '1.25rem !important' }} />}
+                      label={`${buildMetrics[orgName]?.inProgress || 0} Active`}
+                      size="small"
+                      sx={{ 
+                        bgcolor: 'rgba(35, 197, 98, 0.1)', 
+                        color: '#23C562',
+                        animation: buildMetrics[orgName]?.inProgress ? `${pulse} 2s ease-in-out infinite` : 'none',
+                        fontWeight: 500,
+                        height: '28px',
+                        '& .MuiChip-label': {
+                          fontSize: '0.875rem',
+                          px: 1.5
+                        }
+                      }}
+                    />
+                    <Chip
+                      icon={<PendingIcon sx={{ fontSize: '1.25rem !important' }} />}
+                      label={`${buildMetrics[orgName]?.queued || 0} Queued`}
+                      size="small"
+                      sx={{ 
+                        bgcolor: 'rgba(245, 166, 35, 0.1)', 
+                        color: '#F5A623',
+                        animation: buildMetrics[orgName]?.queued ? `${pulse} 2s ease-in-out infinite` : 'none',
+                        fontWeight: 500,
+                        height: '28px',
+                        '& .MuiChip-label': {
+                          fontSize: '0.875rem',
+                          px: 1.5
+                        }
+                      }}
+                    />
+                  </Stack>
                 </Box>
 
                 {/* Repositories Section */}
