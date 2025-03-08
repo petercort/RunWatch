@@ -347,7 +347,17 @@ const WorkflowHistory = () => {
                 </TableHead>
                 <TableBody>
                   {displayedRuns.map((workflow) => (
-                    <TableRow key={workflow.run.id} hover>
+                    <TableRow 
+                      key={workflow.run.id} 
+                      hover
+                      onClick={() => navigate(`/workflow/${workflow.run.id}`)}
+                      sx={{ 
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: 'rgba(88, 166, 255, 0.05)'
+                        }
+                      }}
+                    >
                       <TableCell>
                         <StatusChip 
                           status={workflow.run.status}
@@ -394,7 +404,10 @@ const WorkflowHistory = () => {
                         <Button
                           variant="outlined"
                           size="small"
-                          onClick={() => window.open(workflow.run.url, '_blank', 'noopener,noreferrer')}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent row click
+                            window.open(workflow.run.url, '_blank', 'noopener,noreferrer');
+                          }}
                           sx={{ 
                             borderColor: 'rgba(88, 166, 255, 0.2)',
                             color: '#58A6FF',

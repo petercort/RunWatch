@@ -37,15 +37,9 @@ const WorkflowDetails = () => {
     const fetchWorkflowDetails = async () => {
       try {
         setLoading(true);
-        const response = await apiService.getWorkflowRuns();
-        const workflowRun = response.data.find(wf => wf.run.id.toString() === id.toString());
-        
-        if (workflowRun) {
-          setWorkflow(workflowRun);
-          setError(null);
-        } else {
-          setError('Workflow run not found');
-        }
+        const workflowRun = await apiService.getWorkflowRunById(id);
+        setWorkflow(workflowRun);
+        setError(null);
       } catch (err) {
         setError('Failed to fetch workflow details. Please try again later.');
         console.error(err);
@@ -119,10 +113,10 @@ const WorkflowDetails = () => {
         <Button 
           variant="contained" 
           sx={{ mt: 2 }} 
-          onClick={() => navigate('/')}
+          onClick={() => navigate(-1)} // Change this to use browser history back
           startIcon={<BackIcon />}
         >
-          Back to Dashboard
+          Back
         </Button>
       </Box>
     );
@@ -152,8 +146,8 @@ const WorkflowDetails = () => {
         borderRadius: '12px',
         border: '1px solid rgba(88, 166, 255, 0.2)'
       }}>
-        <Tooltip title="Back to Dashboard">
-          <IconButton onClick={() => navigate('/')} sx={{ mr: 2, color: '#E6EDF3' }}>
+        <Tooltip title="Back to Workflow History">
+          <IconButton onClick={() => navigate(-1)} sx={{ mr: 2, color: '#E6EDF3' }}>
             <BackIcon />
           </IconButton>
         </Tooltip>

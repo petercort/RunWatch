@@ -42,6 +42,17 @@ const apiService = {
     }
   },
 
+  // Get workflow run by ID
+  getWorkflowRunById: async (id) => {
+    try {
+      const response = await axios.get(`${API_URL}/workflow-runs/${id}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Error fetching workflow run ${id}:`, error);
+      throw error;
+    }
+  },
+
   // Get workflow statistics
   getWorkflowStats: async () => {
     try {

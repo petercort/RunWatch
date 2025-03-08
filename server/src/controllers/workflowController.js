@@ -136,3 +136,18 @@ export const getDatabaseStatus = async (req, res) => {
     return errorResponse(res, 'Error retrieving database status', 500, error);
   }
 };
+
+export const getWorkflowRunById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const workflowRun = await WorkflowRun.findOne({ 'run.id': parseInt(id) });
+    
+    if (!workflowRun) {
+      return errorResponse(res, 'Workflow run not found', 404);
+    }
+
+    return successResponse(res, workflowRun);
+  } catch (error) {
+    return errorResponse(res, 'Error retrieving workflow run', 500, error);
+  }
+};

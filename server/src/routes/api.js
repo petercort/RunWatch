@@ -113,4 +113,6 @@ router.post('/sync/:installationId', async (req, res) => {
     }
 });
 
+router.get('/workflow-runs/:id', workflowController.getWorkflowRunById);
+
 export default router;
