@@ -37,14 +37,10 @@ const WorkflowDetails = () => {
     const fetchWorkflowDetails = async () => {
       try {
         setLoading(true);
-        const allWorkflows = await apiService.getWorkflowRuns();
-        const workflowRun = allWorkflows.find(wf => wf.run.id.toString() === id.toString());
+        const response = await apiService.getWorkflowRuns();
+        const workflowRun = response.data.find(wf => wf.run.id.toString() === id.toString());
         
         if (workflowRun) {
-          console.log('GitHub URLs:', {
-            runUrl: workflowRun.run.url,
-            repoUrl: workflowRun.repository.url
-          });
           setWorkflow(workflowRun);
           setError(null);
         } else {
@@ -65,30 +61,35 @@ const WorkflowDetails = () => {
       onWorkflowUpdate: (updatedWorkflow) => {
         if (updatedWorkflow.run.id.toString() === id.toString()) {
           setWorkflow(prevWorkflow => {
-            // Only update if the workflow exists and the update is newer
-            if (!prevWorkflow || new Date(updatedWorkflow.run.updated_at) > new Date(prevWorkflow.run.updated_at)) {
-              return updatedWorkflow;
-            }
-            return prevWorkflow;
+            if (!prevWorkflow) return updatedWorkflow;
+            // Only update if the new data is more recent
+            return new Date(updatedWorkflow.run.updated_at) > new Date(prevWorkflow.run.updated_at)
+              ? updatedWorkflow
+              : prevWorkflow;
           });
         }
       },
       onJobsUpdate: (workflowWithJobs) => {
         if (workflowWithJobs.run.id.toString() === id.toString()) {
           setWorkflow(prevWorkflow => {
-            // Only update if the workflow exists and the update is newer
-            if (!prevWorkflow || new Date(workflowWithJobs.run.updated_at) > new Date(prevWorkflow.run.updated_at)) {
-              return workflowWithJobs;
-            }
-            return prevWorkflow;
+            if (!prevWorkflow) return workflowWithJobs;
+            // Keep existing workflow data but update jobs
+            return {
+              ...prevWorkflow,
+              jobs: workflowWithJobs.jobs,
+              run: {
+                ...prevWorkflow.run,
+                status: workflowWithJobs.run.status,
+                conclusion: workflowWithJobs.run.conclusion,
+                updated_at: workflowWithJobs.run.updated_at
+              }
+            };
           });
         }
       }
     });
 
-    return () => {
-      cleanupListeners();
-    };
+    return () => cleanupListeners();
   }, [id]);
 
   const toggleJobSteps = (jobId) => {

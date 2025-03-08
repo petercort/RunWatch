@@ -27,6 +27,7 @@ import {
 import { Line, Bar } from 'react-chartjs-2';
 import { formatDuration, formatDate } from '../../common/utils/statusHelpers';
 import apiService from '../../api/apiService';
+import { setupSocketListeners } from '../../api/socketService';
 
 const RepositoryView = () => {
   const { repoName } = useParams();
@@ -45,8 +46,13 @@ const RepositoryView = () => {
   const calculateRepoStats = (runs) => {
     if (!runs.length) return null;
 
-    // Group runs by workflow
     const workflowStats = {};
+    let totalRuns = 0;
+    let successfulRuns = 0;
+    let failedRuns = 0;
+    let totalDuration = 0;
+    let durationCount = 0;
+
     runs.forEach(run => {
       const workflowName = run.workflow.name;
       if (!workflowStats[workflowName]) {
@@ -61,35 +67,30 @@ const RepositoryView = () => {
 
       const stats = workflowStats[workflowName];
       stats.total++;
-      if (run.run.conclusion === 'success') stats.successful++;
-      if (run.run.conclusion === 'failure') stats.failed++;
+      totalRuns++;
+      
+      if (run.run.conclusion === 'success') {
+        stats.successful++;
+        successfulRuns++;
+      }
+      if (run.run.conclusion === 'failure') {
+        stats.failed++;
+        failedRuns++;
+      }
       
       const start = new Date(run.run.created_at);
       const end = new Date(run.run.updated_at);
       const duration = end - start;
-      if (duration >= 0) stats.durations.push(duration);
+      if (duration > 0) {
+        stats.durations.push(duration);
+        totalDuration += duration;
+        durationCount++;
+      }
 
-      if (!stats.lastRun || new Date(run.run.created_at) > new Date(stats.lastRun)) {
-        stats.lastRun = run.run.created_at;
+      if (!stats.lastRun || new Date(run.run.updated_at) > new Date(stats.lastRun)) {
+        stats.lastRun = run.run.updated_at;
       }
     });
-
-    // Calculate overall stats
-    const totalRuns = runs.length;
-    const successfulRuns = runs.filter(run => run.run.conclusion === 'success').length;
-    const failedRuns = runs.filter(run => run.run.conclusion === 'failure').length;
-    const allDurations = runs
-      .map(run => {
-        const start = new Date(run.run.created_at);
-        const end = new Date(run.run.updated_at);
-        const duration = end - start;
-        return duration >= 0 ? duration : null;
-      })
-      .filter(Boolean); // Remove any null durations
-
-    const avgDuration = allDurations.length
-      ? Math.floor(allDurations.reduce((acc, curr) => acc + curr, 0) / allDurations.length)
-      : 0;
 
     // Calculate activity trends
     const last30Days = Array.from({ length: 30 }, (_, i) => {
@@ -98,75 +99,40 @@ const RepositoryView = () => {
       return d.toISOString().split('T')[0];
     });
 
-    const dailyStats = last30Days.map(date => {
-      const dayRuns = runs.filter(run => 
-        run.run.created_at.startsWith(date)
-      );
-      
-      return {
-        date,
-        total: dayRuns.length,
-        successful: dayRuns.filter(run => run.run.conclusion === 'success').length,
-        failed: dayRuns.filter(run => run.run.conclusion === 'failure').length,
-      };
-    });
-
     const activityTrends = {
-      labels: dailyStats.map(stat => new Date(stat.date).toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      })),
-      datasets: [
-        {
-          label: 'Total Runs',
-          data: dailyStats.map(stat => stat.total),
-          borderColor: 'rgba(88, 166, 255, 1)',
-          backgroundColor: 'rgba(88, 166, 255, 0.1)',
-          tension: 0.4,
-          fill: true,
-        },
-        {
-          label: 'Successful',
-          data: dailyStats.map(stat => stat.successful),
-          borderColor: 'rgba(35, 197, 98, 1)',
-          backgroundColor: 'rgba(35, 197, 98, 0.1)',
-          tension: 0.4,
-          fill: true,
-        },
-        {
-          label: 'Failed',
-          data: dailyStats.map(stat => stat.failed),
-          borderColor: 'rgba(248, 81, 73, 1)',
-          backgroundColor: 'rgba(248, 81, 73, 0.1)',
-          tension: 0.4,
-          fill: true,
-        },
-      ],
+      labels: last30Days.map(date => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+      datasets: [{
+        label: 'Total Runs',
+        data: last30Days.map(date => 
+          runs.filter(run => run.run.created_at.startsWith(date)).length
+        ),
+        borderColor: 'rgba(88, 166, 255, 1)',
+        backgroundColor: 'rgba(88, 166, 255, 0.1)',
+        tension: 0.4,
+        fill: true,
+      }]
     };
 
-    // Prepare workflow comparison data
-    const workflowNames = Object.keys(workflowStats);
+    // Workflow comparison data
     const workflowComparison = {
-      labels: workflowNames,
+      labels: Object.keys(workflowStats),
       datasets: [
         {
           label: 'Success Rate (%)',
-          data: workflowNames.map(name => {
-            const stats = workflowStats[name];
-            return stats.total ? (stats.successful / stats.total * 100).toFixed(1) : 0;
-          }),
+          data: Object.values(workflowStats).map(stats => 
+            stats.total ? (stats.successful / stats.total * 100).toFixed(1) : 0
+          ),
           backgroundColor: 'rgba(35, 197, 98, 0.6)',
           borderColor: 'rgba(35, 197, 98, 1)',
           borderWidth: 1,
         },
         {
           label: 'Average Duration (minutes)',
-          data: workflowNames.map(name => {
-            const stats = workflowStats[name];
+          data: Object.values(workflowStats).map(stats => {
             const avgDuration = stats.durations.length
               ? stats.durations.reduce((acc, curr) => acc + curr, 0) / stats.durations.length
               : 0;
-            return (avgDuration / (1000 * 60)).toFixed(1); // Convert to minutes
+            return (avgDuration / (1000 * 60)).toFixed(1);
           }),
           backgroundColor: 'rgba(88, 166, 255, 0.6)',
           borderColor: 'rgba(88, 166, 255, 1)',
@@ -179,7 +145,7 @@ const RepositoryView = () => {
       totalRuns,
       successfulRuns,
       failedRuns,
-      avgDuration,
+      avgDuration: durationCount ? totalDuration / durationCount : 0,
       successRate: totalRuns ? (successfulRuns / totalRuns * 100) : 0,
       workflowStats,
       activityTrends,
@@ -202,7 +168,11 @@ const RepositoryView = () => {
           const repoInfo = repoWorkflows[0].repository;
           setRepository(repoInfo);
           setStats(calculateRepoStats(repoWorkflows));
-          setPagination(response.pagination);
+          setPagination(prevPagination => ({
+            ...prevPagination,
+            ...response.pagination
+          }));
+          setError(null);
         } else {
           setError('Repository not found');
         }
@@ -215,6 +185,20 @@ const RepositoryView = () => {
     };
 
     fetchRepositoryData();
+
+    // Set up socket listeners for real-time updates
+    const cleanupListeners = setupSocketListeners({
+      onWorkflowUpdate: (updatedWorkflow) => {
+        if (updatedWorkflow.repository.fullName === decodeURIComponent(repoName)) {
+          // Refresh the data to get the latest stats
+          fetchRepositoryData();
+        }
+      }
+    });
+
+    return () => {
+      cleanupListeners();
+    };
   }, [repoName, pagination.page, pagination.pageSize]);
 
   if (loading) {

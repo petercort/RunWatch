@@ -20,7 +20,7 @@ router.get('/ngrok-verify', (req, res) => {
 router.get('/workflow-runs', workflowController.getAllWorkflowRuns);
 
 // Get workflow runs for a specific repository
-router.get('/workflow-runs/repo/:repoName', workflowController.getRepoWorkflowRuns);
+router.get('/workflow-runs/repo/*', workflowController.getRepoWorkflowRuns);
 
 // Get workflow statistics
 router.get('/stats', workflowController.getWorkflowStats);
