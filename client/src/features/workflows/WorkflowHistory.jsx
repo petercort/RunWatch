@@ -31,6 +31,7 @@ import { Line } from 'react-chartjs-2';
 import StatusChip from '../../common/components/StatusChip';
 import { formatDuration, formatDate } from '../../common/utils/statusHelpers';
 import apiService from '../../api/apiService';
+import { setupSocketListeners } from '../../api/socketService';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -47,6 +48,7 @@ const WorkflowHistory = () => {
     totalPages: 1
   });
   const [stats, setStats] = useState(null);
+  const [syncingRun, setSyncingRun] = useState(null);
 
   const calculateStats = (runs) => {
     if (!runs.length) return null;
@@ -134,6 +136,19 @@ const WorkflowHistory = () => {
     };
   };
 
+  const handleSyncRun = async (e, runId) => {
+    e.stopPropagation(); // Prevent row click
+    try {
+      setSyncingRun(runId);
+      await apiService.syncWorkflowRun(runId);
+      // No need to manually update the UI since we have socket updates
+    } catch (error) {
+      console.error('Error syncing workflow run:', error);
+    } finally {
+      setSyncingRun(null);
+    }
+  };
+
   useEffect(() => {
     const fetchWorkflowHistory = async () => {
       try {
@@ -164,6 +179,42 @@ const WorkflowHistory = () => {
     };
 
     fetchWorkflowHistory();
+
+    // Set up socket listeners for real-time updates
+    const cleanupListeners = setupSocketListeners({
+      onWorkflowUpdate: (updatedWorkflow) => {
+        // Only update if the workflow belongs to this history view
+        if (updatedWorkflow.workflow.name === decodeURIComponent(workflowName) &&
+            updatedWorkflow.repository.fullName === decodeURIComponent(repoName)) {
+          setWorkflowRuns(prev => {
+            const updated = prev.map(workflow =>
+              workflow.run.id === updatedWorkflow.run.id ? updatedWorkflow : workflow
+            );
+            // Recalculate stats with updated data
+            setStats(calculateStats(updated));
+            return updated;
+          });
+        }
+      },
+      onJobsUpdate: (workflowWithJobs) => {
+        // Update if the workflow with jobs belongs to this history view
+        if (workflowWithJobs.workflow.name === decodeURIComponent(workflowName) &&
+            workflowWithJobs.repository.fullName === decodeURIComponent(repoName)) {
+          setWorkflowRuns(prev => {
+            const updated = prev.map(workflow =>
+              workflow.run.id === workflowWithJobs.run.id ? workflowWithJobs : workflow
+            );
+            // Recalculate stats with updated data
+            setStats(calculateStats(updated));
+            return updated;
+          });
+        }
+      }
+    });
+
+    return () => {
+      cleanupListeners(); // Cleanup socket listeners when component unmounts
+    };
   }, [repoName, workflowName, pagination.page, pagination.pageSize]);
 
   if (loading) {
@@ -401,24 +452,46 @@ const WorkflowHistory = () => {
                         {formatDate(workflow.run.created_at)}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation(); // Prevent row click
-                            window.open(workflow.run.url, '_blank', 'noopener,noreferrer');
-                          }}
-                          sx={{ 
-                            borderColor: 'rgba(88, 166, 255, 0.2)',
-                            color: '#58A6FF',
-                            '&:hover': {
-                              borderColor: 'rgba(88, 166, 255, 0.5)',
-                              bgcolor: 'rgba(88, 166, 255, 0.1)'
-                            }
-                          }}
-                        >
-                          View on GitHub
-                        </Button>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(workflow.run.url, '_blank', 'noopener,noreferrer');
+                            }}
+                            sx={{ 
+                              borderColor: 'rgba(88, 166, 255, 0.2)',
+                              color: '#58A6FF',
+                              '&:hover': {
+                                borderColor: 'rgba(88, 166, 255, 0.5)',
+                                bgcolor: 'rgba(88, 166, 255, 0.1)'
+                              }
+                            }}
+                          >
+                            View on GitHub
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={(e) => handleSyncRun(e, workflow.run.id)}
+                            disabled={syncingRun === workflow.run.id}
+                            sx={{ 
+                              borderColor: 'rgba(88, 166, 255, 0.2)',
+                              color: '#58A6FF',
+                              '&:hover': {
+                                borderColor: 'rgba(88, 166, 255, 0.5)',
+                                bgcolor: 'rgba(88, 166, 255, 0.1)'
+                              }
+                            }}
+                          >
+                            {syncingRun === workflow.run.id ? (
+                              <CircularProgress size={16} sx={{ color: '#58A6FF' }} />
+                            ) : (
+                              'Sync'
+                            )}
+                          </Button>
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   ))}

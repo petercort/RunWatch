@@ -151,3 +151,14 @@ export const getWorkflowRunById = async (req, res) => {
     return errorResponse(res, 'Error retrieving workflow run', 500, error);
   }
 };
+
+export const syncWorkflowRun = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const workflowRun = await workflowService.syncWorkflowRun(parseInt(id));
+    req.io.emit('workflowUpdate', workflowRun);
+    return successResponse(res, workflowRun);
+  } catch (error) {
+    return errorResponse(res, 'Error syncing workflow run', 500, error);
+  }
+};

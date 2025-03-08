@@ -293,3 +293,83 @@ export const processWorkflowJobEvent = async (payload) => {
     throw error;
   }
 };
+
+export const syncWorkflowRun = async (runId) => {
+  try {
+    // Find the workflow run in our database
+    const workflowRun = await WorkflowRun.findOne({ 'run.id': runId });
+    if (!workflowRun) {
+      throw new Error('Workflow run not found');
+    }
+
+    // Get the necessary GitHub installation details
+    const { Octokit } = await import('@octokit/rest');
+    const { getGitHubClient } = await import('../utils/githubAuth.js');
+    const [owner] = workflowRun.repository.fullName.split('/');
+
+    // First get the app client to list installations
+    const { app, installations } = await getGitHubClient();
+    
+    // Find the installation for this owner
+    const installation = installations.find(i => i.account.login.toLowerCase() === owner.toLowerCase());
+    if (!installation) {
+      throw new Error(`No GitHub App installation found for ${owner}`);
+    }
+
+    // Now get a client for this specific installation
+    const { app: octokitWithAuth } = await getGitHubClient(installation.id);
+
+    // Extract repository name
+    const repo = workflowRun.repository.name;
+
+    // Fetch latest workflow run data from GitHub
+    const { data: run } = await octokitWithAuth.actions.getWorkflowRun({
+      owner,
+      repo,
+      run_id: runId
+    });
+
+    // Fetch jobs for the workflow run
+    const jobs = [];
+    let page = 1;
+    while (true) {
+      const { data: { jobs: jobsPage } } = await octokitWithAuth.rest.actions.listJobsForWorkflowRun({
+        owner,
+        repo,
+        run_id: runId,
+        per_page: 100,
+        page
+      });
+
+      if (jobsPage.length === 0) break;
+      jobs.push(...jobsPage);
+      page++;
+    }
+
+    // Update the workflow run in our database
+    const payload = {
+      workflow_run: run,
+      repository: {
+        id: workflowRun.repository.id,
+        name: repo,
+        full_name: `${owner}/${repo}`,
+        owner: {
+          login: owner
+        }
+      }
+    };
+
+    // Process the workflow run update
+    const updatedRun = await processWorkflowRun(payload);
+
+    // Update jobs if available
+    if (jobs.length > 0) {
+      await updateWorkflowJobs(runId, jobs);
+    }
+
+    return updatedRun;
+  } catch (error) {
+    console.error('Error syncing workflow run:', error);
+    throw error;
+  }
+};
