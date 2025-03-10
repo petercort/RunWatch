@@ -31,6 +31,7 @@ import { Line } from 'react-chartjs-2';
 import StatusChip from '../../common/components/StatusChip';
 import { formatDuration, formatDate } from '../../common/utils/statusHelpers';
 import apiService from '../../api/apiService';
+import { setupSocketListeners } from '../../api/socketService';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -47,6 +48,7 @@ const WorkflowHistory = () => {
     totalPages: 1
   });
   const [stats, setStats] = useState(null);
+  const [syncingRun, setSyncingRun] = useState(null);
 
   const calculateStats = (runs) => {
     if (!runs.length) return null;
@@ -134,6 +136,19 @@ const WorkflowHistory = () => {
     };
   };
 
+  const handleSyncRun = async (e, runId) => {
+    e.stopPropagation(); // Prevent row click
+    try {
+      setSyncingRun(runId);
+      await apiService.syncWorkflowRun(runId);
+      // No need to manually update the UI since we have socket updates
+    } catch (error) {
+      console.error('Error syncing workflow run:', error);
+    } finally {
+      setSyncingRun(null);
+    }
+  };
+
   useEffect(() => {
     const fetchWorkflowHistory = async () => {
       try {
@@ -141,18 +156,16 @@ const WorkflowHistory = () => {
         const response = await apiService.getRepoWorkflowRuns(
           decodeURIComponent(repoName),
           pagination.page + 1,
-          pagination.pageSize
+          pagination.pageSize,
+          decodeURIComponent(workflowName)
         );
         
-        const filteredRuns = response.data.filter(wf => 
-          wf.workflow.name === decodeURIComponent(workflowName)
-        );
-        
-        setWorkflowRuns(filteredRuns);
-        setStats(calculateStats(filteredRuns));
+        setWorkflowRuns(response.data);
+        setStats(calculateStats(response.data));
         setPagination(prev => ({
           ...prev,
-          ...response.pagination,
+          total: response.pagination.total,
+          totalPages: response.pagination.totalPages,
           page: response.pagination.page - 1 // Convert to 0-based for MUI pagination
         }));
       } catch (err) {
@@ -164,6 +177,42 @@ const WorkflowHistory = () => {
     };
 
     fetchWorkflowHistory();
+
+    // Set up socket listeners for real-time updates
+    const cleanupListeners = setupSocketListeners({
+      onWorkflowUpdate: (updatedWorkflow) => {
+        // Only update if the workflow belongs to this history view
+        if (updatedWorkflow.workflow.name === decodeURIComponent(workflowName) &&
+            updatedWorkflow.repository.fullName === decodeURIComponent(repoName)) {
+          setWorkflowRuns(prev => {
+            const updated = prev.map(workflow =>
+              workflow.run.id === updatedWorkflow.run.id ? updatedWorkflow : workflow
+            );
+            // Recalculate stats with updated data
+            setStats(calculateStats(updated));
+            return updated;
+          });
+        }
+      },
+      onJobsUpdate: (workflowWithJobs) => {
+        // Update if the workflow with jobs belongs to this history view
+        if (workflowWithJobs.workflow.name === decodeURIComponent(workflowName) &&
+            workflowWithJobs.repository.fullName === decodeURIComponent(repoName)) {
+          setWorkflowRuns(prev => {
+            const updated = prev.map(workflow =>
+              workflow.run.id === workflowWithJobs.run.id ? workflowWithJobs : workflow
+            );
+            // Recalculate stats with updated data
+            setStats(calculateStats(updated));
+            return updated;
+          });
+        }
+      }
+    });
+
+    return () => {
+      cleanupListeners(); // Cleanup socket listeners when component unmounts
+    };
   }, [repoName, workflowName, pagination.page, pagination.pageSize]);
 
   if (loading) {
@@ -189,11 +238,6 @@ const WorkflowHistory = () => {
       </Box>
     );
   }
-
-  const displayedRuns = workflowRuns.slice(
-    pagination.page * ITEMS_PER_PAGE,
-    (pagination.page + 1) * ITEMS_PER_PAGE
-  );
 
   return (
     <Box sx={{ pb: 6 }}>
@@ -225,62 +269,63 @@ const WorkflowHistory = () => {
         </Box>
       </Box>
 
-      <Grid container spacing={3}>
-        {/* Stats Cards */}
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <ScheduleIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Average Duration</Typography>
-              </Box>
-              <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
-                {formatDuration(stats?.averageDuration || 0)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TrendingUpIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Success Rate</Typography>
-              </Box>
-              <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
-                {stats?.successRate.toFixed(1)}%
-              </Typography>
-            </CardContent>
-          </Card>
+      <Grid container spacing={2}>
+        {/* Left side metrics */}
+        <Grid item xs={12} md={4}>
+          <Stack spacing={2}>
+            <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <ScheduleIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                  <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Average Duration</Typography>
+                </Box>
+                <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
+                  {formatDuration(stats?.averageDuration || 0)}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <TrendingUpIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                  <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Success Rate</Typography>
+                </Box>
+                <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
+                  {stats?.successRate.toFixed(1)}%
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <SpeedIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                  <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Total Runs</Typography>
+                </Box>
+                <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
+                  {stats?.totalRuns || 0}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Stack>
         </Grid>
 
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <SpeedIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Total Runs</Typography>
-              </Box>
-              <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
-                {stats?.totalRuns || 0}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Activity Chart */}
-        <Grid item xs={12}>
+        {/* Right side activity chart */}
+        <Grid item xs={12} md={8}>
           <Paper elevation={0} sx={{ 
-            p: 3,
+            p: 2,
+            height: '100%',
             bgcolor: '#161B22',
             borderRadius: '12px',
-            border: '1px solid rgba(240, 246, 252, 0.1)'
+            border: '1px solid rgba(240, 246, 252, 0.1)',
+            display: 'flex',
+            flexDirection: 'column'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2, fontSize: '1rem' }}>
               Activity Trends
             </Typography>
-            <Box sx={{ height: 300 }}>
+            <Box sx={{ flex: 1, minHeight: 200 }}>
               <Line
                 data={stats?.trendsData}
                 options={{
@@ -294,7 +339,12 @@ const WorkflowHistory = () => {
                     legend: {
                       position: 'top',
                       labels: {
-                        color: '#8B949E'
+                        color: '#8B949E',
+                        boxWidth: 12,
+                        padding: 8,
+                        font: {
+                          size: 11
+                        }
                       }
                     }
                   },
@@ -305,7 +355,10 @@ const WorkflowHistory = () => {
                         color: 'rgba(240, 246, 252, 0.1)'
                       },
                       ticks: {
-                        color: '#8B949E'
+                        color: '#8B949E',
+                        font: {
+                          size: 10
+                        }
                       }
                     },
                     x: {
@@ -313,7 +366,10 @@ const WorkflowHistory = () => {
                         color: 'rgba(240, 246, 252, 0.1)'
                       },
                       ticks: {
-                        color: '#8B949E'
+                        color: '#8B949E',
+                        font: {
+                          size: 10
+                        }
                       }
                     }
                   }
@@ -338,7 +394,6 @@ const WorkflowHistory = () => {
                     <TableCell sx={{ color: '#8B949E' }}>Run #</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Branch</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Event</TableCell>
-                    <TableCell sx={{ color: '#8B949E' }}>Runner</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Labels</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Duration</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Started</TableCell>
@@ -346,8 +401,18 @@ const WorkflowHistory = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {displayedRuns.map((workflow) => (
-                    <TableRow key={workflow.run.id} hover>
+                  {workflowRuns.map((workflow) => (
+                    <TableRow 
+                      key={workflow.run.id} 
+                      hover
+                      onClick={() => navigate(`/workflow/${workflow.run.id}`)}
+                      sx={{ 
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: 'rgba(88, 166, 255, 0.05)'
+                        }
+                      }}
+                    >
                       <TableCell>
                         <StatusChip 
                           status={workflow.run.status}
@@ -362,9 +427,6 @@ const WorkflowHistory = () => {
                       </TableCell>
                       <TableCell sx={{ color: '#E6EDF3' }}>
                         {workflow.run.event || '-'}
-                      </TableCell>
-                      <TableCell sx={{ color: '#E6EDF3' }}>
-                        {workflow.run.runner_name || 'N/A'}
                       </TableCell>
                       <TableCell>
                         {workflow.run.labels?.map((label, index) => (
@@ -391,21 +453,46 @@ const WorkflowHistory = () => {
                         {formatDate(workflow.run.created_at)}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => window.open(workflow.run.url, '_blank', 'noopener,noreferrer')}
-                          sx={{ 
-                            borderColor: 'rgba(88, 166, 255, 0.2)',
-                            color: '#58A6FF',
-                            '&:hover': {
-                              borderColor: 'rgba(88, 166, 255, 0.5)',
-                              bgcolor: 'rgba(88, 166, 255, 0.1)'
-                            }
-                          }}
-                        >
-                          View on GitHub
-                        </Button>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(workflow.run.url, '_blank', 'noopener,noreferrer');
+                            }}
+                            sx={{ 
+                              borderColor: 'rgba(88, 166, 255, 0.2)',
+                              color: '#58A6FF',
+                              '&:hover': {
+                                borderColor: 'rgba(88, 166, 255, 0.5)',
+                                bgcolor: 'rgba(88, 166, 255, 0.1)'
+                              }
+                            }}
+                          >
+                            View on GitHub
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={(e) => handleSyncRun(e, workflow.run.id)}
+                            disabled={syncingRun === workflow.run.id}
+                            sx={{ 
+                              borderColor: 'rgba(88, 166, 255, 0.2)',
+                              color: '#58A6FF',
+                              '&:hover': {
+                                borderColor: 'rgba(88, 166, 255, 0.5)',
+                                bgcolor: 'rgba(88, 166, 255, 0.1)'
+                              }
+                            }}
+                          >
+                            {syncingRun === workflow.run.id ? (
+                              <CircularProgress size={16} sx={{ color: '#58A6FF' }} />
+                            ) : (
+                              'Sync'
+                            )}
+                          </Button>
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   ))}

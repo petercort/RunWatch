@@ -22,7 +22,10 @@ import {
   InputAdornment,
   Select,
   MenuItem,
-  Pagination
+  Pagination,
+  FormControl,
+  InputLabel,
+  ListSubheader,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -34,6 +37,8 @@ import {
   Book as BookIcon,
   Search as SearchIcon,
   Close as CloseIcon,
+  PlayArrow as PlayArrowIcon,
+  PendingActions as PendingIcon,
 } from '@mui/icons-material';
 import apiService from '../../api/apiService';
 import { setupSocketListeners } from '../../api/socketService';
@@ -188,6 +193,21 @@ const BuildHistoryBadge = ({ run }) => {
 
 const RepositoryIcon = BookIcon;
 
+const STATUS_OPTIONS = [
+  { label: 'All Status', value: 'all' },
+  { label: 'Active States', type: 'group' },
+  { label: 'In Progress', value: 'in_progress' },
+  { label: 'Queued', value: 'queued' },
+  { label: 'Waiting', value: 'waiting' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Completed States', type: 'group' },
+  { label: 'Success', value: 'success', isConclusion: true },
+  { label: 'Failure', value: 'failure', isConclusion: true },
+  { label: 'Cancelled', value: 'cancelled', isConclusion: true },
+  { label: 'Timed Out', value: 'timed_out', isConclusion: true },
+  { label: 'Skipped', value: 'skipped', isConclusion: true }
+];
+
 const Dashboard = () => {
   const searchInputRef = useRef(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -206,6 +226,8 @@ const Dashboard = () => {
     pageSize: parseInt(localStorage.getItem('dashboardPageSize') || '30', 10),
     totalPages: 1
   });
+  const [buildMetrics, setBuildMetrics] = useState({});
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const pageSizeOptions = [30, 50, 100];
   const navigate = useNavigate();
@@ -232,7 +254,12 @@ const Dashboard = () => {
   const fetchWorkflowRuns = async () => {
     try {
       setLoading(true);
-      const response = await apiService.getWorkflowRuns(pagination.page, pagination.pageSize, debouncedSearchQuery);
+      const response = await apiService.getWorkflowRuns(
+        pagination.page, 
+        pagination.pageSize, 
+        debouncedSearchQuery,
+        statusFilter
+      );
       setWorkflowRuns(response.data);
       setPagination(prev => ({
         ...prev,
@@ -249,7 +276,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchWorkflowRuns();
-  }, [pagination.page, pagination.pageSize, debouncedSearchQuery]);
+  }, [pagination.page, pagination.pageSize, debouncedSearchQuery, statusFilter]);
 
   useEffect(() => {
     // Set up real-time updates with socket.io
@@ -379,18 +406,11 @@ const Dashboard = () => {
   }, [workflowRuns]);
 
   // Remove client-side filtering since it's now handled by the server
-  const filteredGroupedWorkflows = groupedWorkflows;
-
-  const paginatedGroupedWorkflows = useMemo(() => {
-    const allOrgs = Object.entries(filteredGroupedWorkflows);
-    const totalRepos = pagination.total; // Use server-provided total
-    
-    return {
-      groups: filteredGroupedWorkflows,
-      totalPages: pagination.totalPages,
-      totalRepos
-    };
-  }, [filteredGroupedWorkflows, pagination]);
+  const paginatedGroupedWorkflows = useMemo(() => ({
+    groups: groupedWorkflows,
+    totalPages: pagination.totalPages,
+    totalRepos: pagination.total
+  }), [groupedWorkflows, pagination]);
 
   const toggleWorkflowHistory = (workflowKey) => {
     setExpandedWorkflows(prev => {
@@ -430,6 +450,73 @@ const Dashboard = () => {
       totalPages: Math.ceil(prev.total / newPageSize)
     }));
   };
+
+  const handleStatusFilterChange = (event) => {
+    setStatusFilter(event.target.value);
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  // Add function to calculate active and queued builds for each org
+  const fetchActiveMetrics = async () => {
+    try {
+      const metrics = await apiService.getActiveMetrics();
+      setBuildMetrics(metrics);
+    } catch (err) {
+      console.error('Failed to fetch active metrics:', err);
+    }
+  };
+
+  // Fetch active metrics initially and update them periodically
+  useEffect(() => {
+    fetchActiveMetrics();
+    const interval = setInterval(fetchActiveMetrics, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Enhanced WebSocket update handler
+  useEffect(() => {
+    const cleanupListeners = setupSocketListeners({
+      onNewWorkflow: (newWorkflow) => {
+        // Update workflow runs only if on first page
+        setWorkflowRuns(prev => {
+          if (pagination.page !== 1) return prev;
+          const exists = prev.some(workflow => workflow.run.id === newWorkflow.run.id);
+          if (exists) {
+            return prev.map(workflow =>
+              workflow.run.id === newWorkflow.run.id ? newWorkflow : workflow
+            );
+          }
+          if (prev.length < pagination.pageSize) {
+            return [newWorkflow, ...prev];
+          }
+          return prev;
+        });
+
+        // Fetch fresh metrics instead of calculating them
+        fetchActiveMetrics();
+      },
+      onWorkflowUpdate: (updatedWorkflow) => {
+        setWorkflowRuns(prev => {
+          if (!prev.some(workflow => workflow.run.id === updatedWorkflow.run.id)) {
+            return prev;
+          }
+          return prev.map(workflow => {
+            if (workflow.run.id === updatedWorkflow.run.id) {
+              // If status changed, fetch fresh metrics
+              if (workflow.run.status !== updatedWorkflow.run.status) {
+                fetchActiveMetrics();
+              }
+              return updatedWorkflow;
+            }
+            return workflow;
+          });
+        });
+      }
+    });
+
+    return () => cleanupListeners();
+  }, [pagination.page, pagination.pageSize]);
 
   if (loading) {
     return (
@@ -524,6 +611,64 @@ const Dashboard = () => {
               ))}
             </Select>
           </Box>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel sx={{ color: '#8B949E' }}>Status</InputLabel>
+            <Select
+              value={statusFilter}
+              onChange={handleStatusFilterChange}
+              label="Status"
+              sx={{ 
+                color: '#E6EDF3',
+                '.MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'rgba(240, 246, 252, 0.1)'
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'rgba(240, 246, 252, 0.2)'
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#58A6FF'
+                },
+                '.MuiSelect-icon': {
+                  color: '#8B949E'
+                }
+              }}
+              MenuProps={{
+                PaperProps: {
+                  sx: {
+                    bgcolor: '#161B22',
+                    border: '1px solid rgba(240, 246, 252, 0.1)',
+                    '& .MuiMenuItem-root': {
+                      color: '#E6EDF3',
+                      '&:hover': {
+                        bgcolor: 'rgba(88, 166, 255, 0.1)'
+                      },
+                      '&.Mui-selected': {
+                        bgcolor: 'rgba(88, 166, 255, 0.15)',
+                        '&:hover': {
+                          bgcolor: 'rgba(88, 166, 255, 0.25)'
+                        }
+                      }
+                    },
+                    '& .MuiListSubheader-root': {
+                      color: '#8B949E',
+                      bgcolor: '#161B22',
+                      lineHeight: '32px'
+                    }
+                  }
+                }
+              }}
+            >
+              {STATUS_OPTIONS.map(option => (
+                option.type === 'group' ? (
+                  <ListSubheader key={option.label}>{option.label}</ListSubheader>
+                ) : (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                )
+              ))}
+            </Select>
+          </FormControl>
           <Tooltip title="Refresh">
             <IconButton 
               onClick={fetchWorkflowRuns}
@@ -573,6 +718,9 @@ const Dashboard = () => {
                   p: 3,
                   borderBottom: '1px solid rgba(240, 246, 252, 0.1)',
                   background: 'linear-gradient(90deg, rgba(88, 166, 255, 0.1) 0%, rgba(88, 166, 255, 0.05) 100%)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
                 }}>
                   <Typography 
                     variant="h5" 
@@ -584,6 +732,40 @@ const Dashboard = () => {
                   >
                     {orgName}
                   </Typography>
+                  <Stack direction="row" spacing={2}>
+                    <Chip
+                      icon={<PlayArrowIcon sx={{ fontSize: '1.25rem !important' }} />}
+                      label={`${buildMetrics[orgName]?.inProgress || 0} In Progress`}
+                      size="small"
+                      sx={{ 
+                        bgcolor: 'rgba(35, 197, 98, 0.1)', 
+                        color: '#23C562',
+                        animation: buildMetrics[orgName]?.inProgress ? `${pulse} 2s ease-in-out infinite` : 'none',
+                        fontWeight: 500,
+                        height: '28px',
+                        '& .MuiChip-label': {
+                          fontSize: '0.875rem',
+                          px: 1.5
+                        }
+                      }}
+                    />
+                    <Chip
+                      icon={<PendingIcon sx={{ fontSize: '1.25rem !important' }} />}
+                      label={`${buildMetrics[orgName]?.queued || 0} Queued`}
+                      size="small"
+                      sx={{ 
+                        bgcolor: 'rgba(245, 166, 35, 0.1)', 
+                        color: '#F5A623',
+                        animation: buildMetrics[orgName]?.queued ? `${pulse} 2s ease-in-out infinite` : 'none',
+                        fontWeight: 500,
+                        height: '28px',
+                        '& .MuiChip-label': {
+                          fontSize: '0.875rem',
+                          px: 1.5
+                        }
+                      }}
+                    />
+                  </Stack>
                 </Box>
 
                 {/* Repositories Section */}

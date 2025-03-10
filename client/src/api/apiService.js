@@ -17,10 +17,10 @@ export const socket = io(WS_URL, {
 // API Services
 const apiService = {
   // Get all workflow runs
-  getWorkflowRuns: async (page = 1, pageSize = 30, search = '') => {
+  getWorkflowRuns: async (page = 1, pageSize = 30, search = '', status = 'all') => {
     try {
       const response = await axios.get(`${API_URL}/workflow-runs`, {
-        params: { page, pageSize, search }
+        params: { page, pageSize, search, status }
       });
       return response.data.data || { data: [], pagination: { total: 0, page: 1, pageSize: 30, totalPages: 1 } };
     } catch (error) {
@@ -30,14 +30,38 @@ const apiService = {
   },
 
   // Get workflow runs for a specific repository
-  getRepoWorkflowRuns: async (repoName, page = 1, pageSize = 30) => {
+  getRepoWorkflowRuns: async (repoName, page = 1, pageSize = 30, workflowName = null) => {
     try {
-      const response = await axios.get(`${API_URL}/workflow-runs/repo/${repoName}`, {
-        params: { page, pageSize }
-      });
+      const params = { page, pageSize };
+      if (workflowName) {
+        params.workflowName = encodeURIComponent(workflowName);
+      }
+      const response = await axios.get(`${API_URL}/workflow-runs/repo/${repoName}`, { params });
       return response.data.data || { data: [], pagination: { total: 0, page: 1, pageSize: 30, totalPages: 1 } };
     } catch (error) {
       console.error(`Error fetching workflow runs for repo ${repoName}:`, error);
+      throw error;
+    }
+  },
+
+  // Get workflow run by ID
+  getWorkflowRunById: async (id) => {
+    try {
+      const response = await axios.get(`${API_URL}/workflow-runs/${id}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Error fetching workflow run ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Sync workflow run
+  syncWorkflowRun: async (id) => {
+    try {
+      const response = await axios.post(`${API_URL}/workflow-runs/${id}/sync`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Error syncing workflow run ${id}:`, error);
       throw error;
     }
   },
@@ -116,6 +140,17 @@ const apiService = {
       return response.data;
     } catch (error) {
       console.error('Error fetching active sync:', error);
+      throw error;
+    }
+  },
+
+  // Get active metrics
+  getActiveMetrics: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/workflow-runs/metrics`);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching active metrics:', error);
       throw error;
     }
   }

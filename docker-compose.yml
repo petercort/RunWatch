@@ -54,11 +54,11 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: http://localhost/api
+        REACT_APP_WEBSOCKET_URL: ws://localhost
     container_name: runwatch-client
     restart: always
-    environment:
-      REACT_APP_API_URL: http://localhost/api
-      REACT_APP_WEBSOCKET_URL: ws://localhost
     ports:
       - "80:80"
     networks:

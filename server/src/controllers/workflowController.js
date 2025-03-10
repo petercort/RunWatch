@@ -18,16 +18,28 @@ export const getAllWorkflowRuns = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 30;
     const searchQuery = req.query.search || '';
+    const status = req.query.status || 'all';
     const skip = (page - 1) * pageSize;
 
-    // Get distinct repositories with search filter if provided
-    let repoQuery = {};
+    // Build the query with search and status filters
+    let query = {};
     if (searchQuery) {
-      repoQuery['repository.fullName'] = { $regex: searchQuery, $options: 'i' };
+      query['repository.fullName'] = { $regex: searchQuery, $options: 'i' };
     }
 
-    // First get distinct repositories filtered by search
-    const distinctRepos = await WorkflowRun.distinct('repository.fullName', repoQuery);
+    // Add status filter
+    if (status !== 'all') {
+      if (['in_progress', 'queued', 'waiting', 'pending'].includes(status)) {
+        query['run.status'] = status;
+      } else {
+        // For conclusion statuses (success, failure, etc.)
+        query['run.status'] = 'completed';
+        query['run.conclusion'] = status;
+      }
+    }
+
+    // First get distinct repositories with filters
+    const distinctRepos = await WorkflowRun.distinct('repository.fullName', query);
     const totalCount = distinctRepos.length;
 
     // Get the paginated repositories
@@ -35,7 +47,8 @@ export const getAllWorkflowRuns = async (req, res) => {
 
     // Then get workflow runs for these repositories
     const workflowRuns = await WorkflowRun.find({
-      'repository.fullName': { $in: paginatedRepos }
+      'repository.fullName': { $in: paginatedRepos },
+      ...query
     }).sort({ 'run.created_at': -1 });
 
     return successResponse(res, {
@@ -54,19 +67,28 @@ export const getAllWorkflowRuns = async (req, res) => {
 
 export const getRepoWorkflowRuns = async (req, res) => {
   try {
-    const { repoName } = req.params;
+    const repoPath = req.params[0];
+    if (!repoPath) {
+      return errorResponse(res, 'Repository name is required', 400);
+    }
+
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 30;
+    const workflowName = req.query.workflowName ? decodeURIComponent(req.query.workflowName) : null;
     const skip = (page - 1) * pageSize;
 
-    // Get total count for pagination
-    const totalCount = await WorkflowRun.countDocuments({
-      'repository.fullName': repoName
-    });
+    // Build query with workflow name filter if provided
+    const query = {
+      'repository.fullName': repoPath
+    };
+    if (workflowName) {
+      query['workflow.name'] = workflowName;
+    }
 
-    const workflowRuns = await WorkflowRun.find({
-      'repository.fullName': repoName
-    })
+    // Get total count for pagination with the workflow filter
+    const totalCount = await WorkflowRun.countDocuments(query);
+
+    const workflowRuns = await WorkflowRun.find(query)
       .sort({ 'run.created_at': -1 })
       .skip(skip)
       .limit(pageSize);
@@ -129,5 +151,43 @@ export const getDatabaseStatus = async (req, res) => {
     return successResponse(res, status);
   } catch (error) {
     return errorResponse(res, 'Error retrieving database status', 500, error);
+  }
+};
+
+export const getWorkflowRunById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const workflowRun = await WorkflowRun.findOne({ 'run.id': parseInt(id) });
+    
+    if (!workflowRun) {
+      return errorResponse(res, 'Workflow run not found', 404);
+    }
+
+    return successResponse(res, workflowRun);
+  } catch (error) {
+    return errorResponse(res, 'Error retrieving workflow run', 500, error);
+  }
+};
+
+export const syncWorkflowRun = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const workflowRun = await workflowService.syncWorkflowRun(parseInt(id));
+    req.io.emit('workflowUpdate', workflowRun);
+    return successResponse(res, workflowRun);
+  } catch (error) {
+    return errorResponse(res, 'Error syncing workflow run', 500, error);
+  }
+};
+
+export const getActiveMetrics = async (req, res) => {
+  try {
+    console.log('Getting active workflow metrics...');
+    const metrics = await workflowService.getActiveWorkflowMetrics();
+    console.log('Metrics response:', metrics);
+    return successResponse(res, metrics);
+  } catch (error) {
+    console.error('Error retrieving active workflow metrics:', error);
+    return errorResponse(res, 'Error retrieving active workflow metrics', 500, error);
   }
 };
