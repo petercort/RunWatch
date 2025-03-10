@@ -840,7 +840,7 @@ const Dashboard = () => {
                   <Stack direction="row" spacing={2}>
                     <Chip
                       icon={<PlayArrowIcon sx={{ fontSize: '1.25rem !important' }} />}
-                      label={`${buildMetrics[orgName]?.inProgress || 0} Active`}
+                      label={`${buildMetrics[orgName]?.inProgress || 0} In Progress`}
                       size="small"
                       sx={{ 
                         bgcolor: 'rgba(35, 197, 98, 0.1)', 
