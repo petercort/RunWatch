@@ -104,6 +104,13 @@ export const updateWorkflowJobs = async (runId, jobs) => {
       conclusion: job.conclusion,
       started_at: job.started_at,
       completed_at: job.completed_at,
+      runner_id: job.runner_id,
+      runner_name: job.runner_name,
+      runner_group_id: job.runner_group_id,
+      runner_group_name: job.runner_group_name,
+      runner_os: job.runner_os || (job.labels?.find(l => l.includes('ubuntu') || l.includes('windows') || l.includes('macos')) || '').split('-')[0],
+      runner_version: job.labels?.find(l => l.includes('(') && l.includes(')'))?.match(/\((.*?)\)/)?.[1] || '',
+      runner_image_version: job.labels?.find(l => l.includes('-'))?.split('-')[1] || '',
       steps: job.steps.map(step => ({
         name: step.name,
         status: step.status,
@@ -244,6 +251,38 @@ export const processWorkflowJobEvent = async (payload) => {
 
   // Update or add the job information
   const jobIndex = workflowRun.jobs?.findIndex(job => job.id === workflow_job.id) ?? -1;
+
+  const processGitHubRunnerInfo = (job) => {
+    let runnerOs = '';
+    let runnerVersion = '';
+    let imageVersion = '';
+
+    if (job.labels) {
+      // GitHub-hosted runners have labels like "ubuntu-latest", "ubuntu-22.04", "windows-2022"
+      const osLabel = job.labels.find(l => l.match(/^(ubuntu|windows|macos)/));
+      if (osLabel) {
+        const [os, version] = osLabel.split('-');
+        runnerOs = os;
+        imageVersion = version;
+      }
+
+      // Look for version in GitHub Actions label like "GitHub Actions (413)"
+      const githubLabel = job.labels.find(l => l.includes('GitHub Actions'));
+      if (githubLabel) {
+        const match = githubLabel.match(/\((.*?)\)/);
+        if (match) {
+          runnerVersion = match[1];
+        }
+      }
+    }
+
+    return {
+      runner_os: runnerOs,
+      runner_version: runnerVersion,
+      runner_image_version: imageVersion
+    };
+  };
+
   const updatedJob = {
     id: workflow_job.id,
     name: workflow_job.name,
@@ -251,6 +290,11 @@ export const processWorkflowJobEvent = async (payload) => {
     conclusion: workflow_job.conclusion,
     started_at: workflow_job.started_at,
     completed_at: workflow_job.completed_at,
+    runner_id: workflow_job.runner_id,
+    runner_name: workflow_job.runner_name,
+    runner_group_id: workflow_job.runner_group_id,
+    runner_group_name: workflow_job.runner_group_name,
+    ...processGitHubRunnerInfo(workflow_job),
     steps: workflow_job.steps?.map(step => ({
       name: step.name,
       status: step.status,

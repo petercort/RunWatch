@@ -389,7 +389,6 @@ const WorkflowHistory = () => {
                     <TableCell sx={{ color: '#8B949E' }}>Run #</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Branch</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Event</TableCell>
-                    <TableCell sx={{ color: '#8B949E' }}>Runner</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Labels</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Duration</TableCell>
                     <TableCell sx={{ color: '#8B949E' }}>Started</TableCell>
@@ -423,9 +422,6 @@ const WorkflowHistory = () => {
                       </TableCell>
                       <TableCell sx={{ color: '#E6EDF3' }}>
                         {workflow.run.event || '-'}
-                      </TableCell>
-                      <TableCell sx={{ color: '#E6EDF3' }}>
-                        {workflow.run.runner_name || 'N/A'}
                       </TableCell>
                       <TableCell>
                         {workflow.run.labels?.map((label, index) => (

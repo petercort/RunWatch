@@ -59,6 +59,13 @@ const WorkflowRunSchema = new mongoose.Schema({
     },
     started_at: Date,
     completed_at: Date,
+    runner_id: Number,
+    runner_name: String,
+    runner_group_id: Number,
+    runner_group_name: String,
+    runner_os: String,
+    runner_version: String,
+    runner_image_version: String,
     steps: [{
       name: String,
       status: {

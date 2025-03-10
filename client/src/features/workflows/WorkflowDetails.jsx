@@ -303,11 +303,64 @@ const WorkflowDetails = () => {
                       <Typography sx={{ color: '#E6EDF3', fontWeight: 500 }}>
                         {job.name}
                       </Typography>
+                      {job.runner_name && (
+                        <Stack direction="row" spacing={0.5} sx={{ 
+                          color: '#8B949E',
+                          display: 'flex',
+                          alignItems: 'center',
+                          bgcolor: 'rgba(88, 166, 255, 0.1)',
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: '4px',
+                          border: '1px solid rgba(88, 166, 255, 0.2)',
+                          fontSize: '0.875rem'
+                        }}>
+                          <Typography component="span" sx={{ opacity: 0.7, fontSize: 'inherit' }}>Runner:</Typography>
+                          {job.runner_os ? (
+                            <>
+                              <Typography component="span" sx={{ fontSize: 'inherit' }}>
+                                {job.runner_os} {job.runner_image_version}
+                              </Typography>
+                              {job.runner_version && (
+                                <Typography component="span" sx={{ fontSize: 'inherit', opacity: 0.7 }}>
+                                  ({job.runner_version})
+                                </Typography>
+                              )}
+                            </>
+                          ) : (
+                            <Typography component="span" sx={{ fontSize: 'inherit' }}>
+                              {job.runner_name}
+                              {job.runner_group_name && ` (${job.runner_group_name})`}
+                            </Typography>
+                          )}
+                        </Stack>
+                      )}
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                       <Typography variant="body2" sx={{ color: '#8B949E' }}>
                         {formatDuration(job.started_at, job.completed_at)}
                       </Typography>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent collapse toggle
+                          // Construct job-specific GitHub URL by appending /job/{jobId} to the run URL
+                          const baseUrl = workflow.run.url; // URL is already in https://github.com/... format
+                          const jobUrl = `${baseUrl}/job/${job.id}`;
+                          window.open(jobUrl, '_blank', 'noopener,noreferrer');
+                        }}
+                        sx={{ 
+                          borderColor: 'rgba(88, 166, 255, 0.2)',
+                          color: '#58A6FF',
+                          '&:hover': {
+                            borderColor: 'rgba(88, 166, 255, 0.5)',
+                            bgcolor: 'rgba(88, 166, 255, 0.1)'
+                          }
+                        }}
+                      >
+                        View on GitHub
+                      </Button>
                       <ExpandMoreIcon sx={{ 
                         color: '#8B949E',
                         transform: expandedJobs.has(job.id) ? 'rotate(180deg)' : 'none',
@@ -346,21 +399,6 @@ const WorkflowDetails = () => {
                               <Typography variant="body2" sx={{ color: '#8B949E' }}>
                                 {formatDuration(step.started_at, step.completed_at)}
                               </Typography>
-                              <Button 
-                                variant="outlined"
-                                size="small"
-                                onClick={() => window.open(workflow.run.url, '_blank', 'noopener,noreferrer')}
-                                sx={{ 
-                                  borderColor: 'rgba(88, 166, 255, 0.2)',
-                                  color: '#58A6FF',
-                                  '&:hover': {
-                                    borderColor: 'rgba(88, 166, 255, 0.5)',
-                                    bgcolor: 'rgba(88, 166, 255, 0.1)'
-                                  }
-                                }}
-                              >
-                                View on GitHub
-                              </Button>
                             </Box>
                           </Box>
                         ))}
