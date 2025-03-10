@@ -276,62 +276,63 @@ const WorkflowHistory = () => {
         </Box>
       </Box>
 
-      <Grid container spacing={3}>
-        {/* Stats Cards */}
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <ScheduleIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Average Duration</Typography>
-              </Box>
-              <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
-                {formatDuration(stats?.averageDuration || 0)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TrendingUpIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Success Rate</Typography>
-              </Box>
-              <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
-                {stats?.successRate.toFixed(1)}%
-              </Typography>
-            </CardContent>
-          </Card>
+      <Grid container spacing={2}>
+        {/* Left side metrics */}
+        <Grid item xs={12} md={4}>
+          <Stack spacing={2}>
+            <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <ScheduleIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                  <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Average Duration</Typography>
+                </Box>
+                <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
+                  {formatDuration(stats?.averageDuration || 0)}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <TrendingUpIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                  <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Success Rate</Typography>
+                </Box>
+                <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
+                  {stats?.successRate.toFixed(1)}%
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
+              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <SpeedIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                  <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Total Runs</Typography>
+                </Box>
+                <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
+                  {stats?.totalRuns || 0}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Stack>
         </Grid>
 
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <SpeedIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Total Runs</Typography>
-              </Box>
-              <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
-                {stats?.totalRuns || 0}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Activity Chart */}
-        <Grid item xs={12}>
+        {/* Right side activity chart */}
+        <Grid item xs={12} md={8}>
           <Paper elevation={0} sx={{ 
-            p: 3,
+            p: 2,
+            height: '100%',
             bgcolor: '#161B22',
             borderRadius: '12px',
-            border: '1px solid rgba(240, 246, 252, 0.1)'
+            border: '1px solid rgba(240, 246, 252, 0.1)',
+            display: 'flex',
+            flexDirection: 'column'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2, fontSize: '1rem' }}>
               Activity Trends
             </Typography>
-            <Box sx={{ height: 300 }}>
+            <Box sx={{ flex: 1, minHeight: 200 }}>
               <Line
                 data={stats?.trendsData}
                 options={{
@@ -345,7 +346,12 @@ const WorkflowHistory = () => {
                     legend: {
                       position: 'top',
                       labels: {
-                        color: '#8B949E'
+                        color: '#8B949E',
+                        boxWidth: 12,
+                        padding: 8,
+                        font: {
+                          size: 11
+                        }
                       }
                     }
                   },
@@ -356,7 +362,10 @@ const WorkflowHistory = () => {
                         color: 'rgba(240, 246, 252, 0.1)'
                       },
                       ticks: {
-                        color: '#8B949E'
+                        color: '#8B949E',
+                        font: {
+                          size: 10
+                        }
                       }
                     },
                     x: {
@@ -364,7 +373,10 @@ const WorkflowHistory = () => {
                         color: 'rgba(240, 246, 252, 0.1)'
                       },
                       ticks: {
-                        color: '#8B949E'
+                        color: '#8B949E',
+                        font: {
+                          size: 10
+                        }
                       }
                     }
                   }
