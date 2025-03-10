@@ -506,35 +506,22 @@ const Dashboard = () => {
   };
 
   // Add function to calculate active and queued builds for each org
-  const calculateBuildMetrics = (workflows) => {
-    const metrics = {};
-    workflows.forEach(workflow => {
-      const [orgName] = workflow.repository.fullName.split('/');
-      if (!metrics[orgName]) {
-        metrics[orgName] = {
-          inProgress: 0,
-          queued: 0
-        };
-      }
-      
-      if (workflow.run.status === 'in_progress') {
-        metrics[orgName].inProgress++;
-      } else if (workflow.run.status === 'queued' || workflow.run.status === 'waiting' || workflow.run.status === 'pending') {
-        metrics[orgName].queued++;
-      }
-    });
-    return metrics;
+  const fetchActiveMetrics = async () => {
+    try {
+      const metrics = await apiService.getActiveMetrics();
+      setBuildMetrics(metrics);
+    } catch (err) {
+      console.error('Failed to fetch active metrics:', err);
+    }
   };
 
-  // Update build metrics when workflows change
+  // Fetch active metrics initially and update them periodically
   useEffect(() => {
-    setBuildMetrics(calculateBuildMetrics(workflowRuns));
-  }, [workflowRuns]);
+    fetchActiveMetrics();
+    const interval = setInterval(fetchActiveMetrics, 30000); // Update every 30 seconds
 
-  // Remove the periodic refresh effect since we'll rely solely on WebSocket updates
-  useEffect(() => {
-    setBuildMetrics(calculateBuildMetrics(workflowRuns));
-  }, [workflowRuns]);
+    return () => clearInterval(interval);
+  }, []);
 
   // Enhanced WebSocket update handler
   useEffect(() => {
@@ -555,62 +542,19 @@ const Dashboard = () => {
           return prev;
         });
 
-        // Update build metrics independently
-        setBuildMetrics(prev => {
-          const [orgName] = newWorkflow.repository.fullName.split('/');
-          const metrics = { ...prev };
-          if (!metrics[orgName]) {
-            metrics[orgName] = { inProgress: 0, queued: 0 };
-          }
-          
-          // Recalculate metrics for the specific organization
-          const newMetrics = { ...metrics[orgName] };
-          if (newWorkflow.run.status === 'in_progress') {
-            newMetrics.inProgress++;
-          } else if (['queued', 'waiting', 'pending'].includes(newWorkflow.run.status)) {
-            newMetrics.queued++;
-          }
-          
-          return {
-            ...metrics,
-            [orgName]: newMetrics
-          };
-        });
+        // Fetch fresh metrics instead of calculating them
+        fetchActiveMetrics();
       },
       onWorkflowUpdate: (updatedWorkflow) => {
-        const [orgName] = updatedWorkflow.repository.fullName.split('/');
-        
-        // Update workflow runs if it exists in current view
         setWorkflowRuns(prev => {
           if (!prev.some(workflow => workflow.run.id === updatedWorkflow.run.id)) {
             return prev;
           }
           return prev.map(workflow => {
             if (workflow.run.id === updatedWorkflow.run.id) {
-              // If status changed, update build metrics
+              // If status changed, fetch fresh metrics
               if (workflow.run.status !== updatedWorkflow.run.status) {
-                setBuildMetrics(prevMetrics => {
-                  const metrics = { ...prevMetrics };
-                  if (!metrics[orgName]) {
-                    metrics[orgName] = { inProgress: 0, queued: 0 };
-                  }
-                  
-                  // Decrement old status count
-                  if (workflow.run.status === 'in_progress') {
-                    metrics[orgName].inProgress = Math.max(0, metrics[orgName].inProgress - 1);
-                  } else if (['queued', 'waiting', 'pending'].includes(workflow.run.status)) {
-                    metrics[orgName].queued = Math.max(0, metrics[orgName].queued - 1);
-                  }
-                  
-                  // Increment new status count
-                  if (updatedWorkflow.run.status === 'in_progress') {
-                    metrics[orgName].inProgress++;
-                  } else if (['queued', 'waiting', 'pending'].includes(updatedWorkflow.run.status)) {
-                    metrics[orgName].queued++;
-                  }
-                  
-                  return metrics;
-                });
+                fetchActiveMetrics();
               }
               return updatedWorkflow;
             }

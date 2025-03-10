@@ -162,3 +162,15 @@ export const syncWorkflowRun = async (req, res) => {
     return errorResponse(res, 'Error syncing workflow run', 500, error);
   }
 };
+
+export const getActiveMetrics = async (req, res) => {
+  try {
+    console.log('Getting active workflow metrics...');
+    const metrics = await workflowService.getActiveWorkflowMetrics();
+    console.log('Metrics response:', metrics);
+    return successResponse(res, metrics);
+  } catch (error) {
+    console.error('Error retrieving active workflow metrics:', error);
+    return errorResponse(res, 'Error retrieving active workflow metrics', 500, error);
+  }
+};

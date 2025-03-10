@@ -140,6 +140,17 @@ const apiService = {
       console.error('Error fetching active sync:', error);
       throw error;
     }
+  },
+
+  // Get active metrics
+  getActiveMetrics: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/workflow-runs/metrics`);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching active metrics:', error);
+      throw error;
+    }
   }
 };
 
