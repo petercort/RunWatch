@@ -18,16 +18,28 @@ export const getAllWorkflowRuns = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 30;
     const searchQuery = req.query.search || '';
+    const status = req.query.status || 'all';
     const skip = (page - 1) * pageSize;
 
-    // Get distinct repositories with search filter if provided
-    let repoQuery = {};
+    // Build the query with search and status filters
+    let query = {};
     if (searchQuery) {
-      repoQuery['repository.fullName'] = { $regex: searchQuery, $options: 'i' };
+      query['repository.fullName'] = { $regex: searchQuery, $options: 'i' };
     }
 
-    // First get distinct repositories filtered by search
-    const distinctRepos = await WorkflowRun.distinct('repository.fullName', repoQuery);
+    // Add status filter
+    if (status !== 'all') {
+      if (['in_progress', 'queued', 'waiting', 'pending'].includes(status)) {
+        query['run.status'] = status;
+      } else {
+        // For conclusion statuses (success, failure, etc.)
+        query['run.status'] = 'completed';
+        query['run.conclusion'] = status;
+      }
+    }
+
+    // First get distinct repositories with filters
+    const distinctRepos = await WorkflowRun.distinct('repository.fullName', query);
     const totalCount = distinctRepos.length;
 
     // Get the paginated repositories
@@ -35,7 +47,8 @@ export const getAllWorkflowRuns = async (req, res) => {
 
     // Then get workflow runs for these repositories
     const workflowRuns = await WorkflowRun.find({
-      'repository.fullName': { $in: paginatedRepos }
+      'repository.fullName': { $in: paginatedRepos },
+      ...query
     }).sort({ 'run.created_at': -1 });
 
     return successResponse(res, {

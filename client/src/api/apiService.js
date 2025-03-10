@@ -17,10 +17,10 @@ export const socket = io(WS_URL, {
 // API Services
 const apiService = {
   // Get all workflow runs
-  getWorkflowRuns: async (page = 1, pageSize = 30, search = '') => {
+  getWorkflowRuns: async (page = 1, pageSize = 30, search = '', status = 'all') => {
     try {
       const response = await axios.get(`${API_URL}/workflow-runs`, {
-        params: { page, pageSize, search }
+        params: { page, pageSize, search, status }
       });
       return response.data.data || { data: [], pagination: { total: 0, page: 1, pageSize: 30, totalPages: 1 } };
     } catch (error) {

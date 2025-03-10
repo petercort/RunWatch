@@ -254,7 +254,12 @@ const Dashboard = () => {
   const fetchWorkflowRuns = async () => {
     try {
       setLoading(true);
-      const response = await apiService.getWorkflowRuns(pagination.page, pagination.pageSize, debouncedSearchQuery);
+      const response = await apiService.getWorkflowRuns(
+        pagination.page, 
+        pagination.pageSize, 
+        debouncedSearchQuery,
+        statusFilter
+      );
       setWorkflowRuns(response.data);
       setPagination(prev => ({
         ...prev,
@@ -271,7 +276,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchWorkflowRuns();
-  }, [pagination.page, pagination.pageSize, debouncedSearchQuery]);
+  }, [pagination.page, pagination.pageSize, debouncedSearchQuery, statusFilter]);
 
   useEffect(() => {
     // Set up real-time updates with socket.io
@@ -401,65 +406,11 @@ const Dashboard = () => {
   }, [workflowRuns]);
 
   // Remove client-side filtering since it's now handled by the server
-  const filteredGroupedWorkflows = useMemo(() => {
-    const filtered = {};
-    
-    Object.entries(groupedWorkflows).forEach(([orgName, orgData]) => {
-      filtered[orgName] = {
-        repositories: {}
-      };
-      
-      Object.entries(orgData.repositories).forEach(([repoKey, repoData]) => {
-        const filteredWorkflows = {};
-        
-        Object.entries(repoData.workflows).forEach(([workflowKey, workflowData]) => {
-          const filteredRuns = workflowData.runs.filter(workflow => {
-            if (statusFilter === 'all') return true;
-            
-            const selectedOption = STATUS_OPTIONS.find(opt => opt.value === statusFilter);
-            if (!selectedOption) return true;
-            
-            if (selectedOption.isConclusion) {
-              return workflow.run.status === 'completed' && workflow.run.conclusion === statusFilter;
-            }
-            
-            return workflow.run.status === statusFilter;
-          });
-          
-          if (filteredRuns.length > 0) {
-            filteredWorkflows[workflowKey] = {
-              ...workflowData,
-              runs: filteredRuns
-            };
-          }
-        });
-        
-        if (Object.keys(filteredWorkflows).length > 0) {
-          filtered[orgName].repositories[repoKey] = {
-            ...repoData,
-            workflows: filteredWorkflows
-          };
-        }
-      });
-      
-      if (Object.keys(filtered[orgName].repositories).length === 0) {
-        delete filtered[orgName];
-      }
-    });
-    
-    return filtered;
-  }, [groupedWorkflows, statusFilter]);
-
-  const paginatedGroupedWorkflows = useMemo(() => {
-    const allOrgs = Object.entries(filteredGroupedWorkflows);
-    const totalRepos = pagination.total; // Use server-provided total
-    
-    return {
-      groups: filteredGroupedWorkflows,
-      totalPages: pagination.totalPages,
-      totalRepos
-    };
-  }, [filteredGroupedWorkflows, pagination]);
+  const paginatedGroupedWorkflows = useMemo(() => ({
+    groups: groupedWorkflows,
+    totalPages: pagination.totalPages,
+    totalRepos: pagination.total
+  }), [groupedWorkflows, pagination]);
 
   const toggleWorkflowHistory = (workflowKey) => {
     setExpandedWorkflows(prev => {
