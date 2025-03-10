@@ -156,18 +156,16 @@ const WorkflowHistory = () => {
         const response = await apiService.getRepoWorkflowRuns(
           decodeURIComponent(repoName),
           pagination.page + 1,
-          pagination.pageSize
+          pagination.pageSize,
+          decodeURIComponent(workflowName)
         );
         
-        const filteredRuns = response.data.filter(wf => 
-          wf.workflow.name === decodeURIComponent(workflowName)
-        );
-        
-        setWorkflowRuns(filteredRuns);
-        setStats(calculateStats(filteredRuns));
+        setWorkflowRuns(response.data);
+        setStats(calculateStats(response.data));
         setPagination(prev => ({
           ...prev,
-          ...response.pagination,
+          total: response.pagination.total,
+          totalPages: response.pagination.totalPages,
           page: response.pagination.page - 1 // Convert to 0-based for MUI pagination
         }));
       } catch (err) {
@@ -240,11 +238,6 @@ const WorkflowHistory = () => {
       </Box>
     );
   }
-
-  const displayedRuns = workflowRuns.slice(
-    pagination.page * ITEMS_PER_PAGE,
-    (pagination.page + 1) * ITEMS_PER_PAGE
-  );
 
   return (
     <Box sx={{ pb: 6 }}>
@@ -408,7 +401,7 @@ const WorkflowHistory = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {displayedRuns.map((workflow) => (
+                  {workflowRuns.map((workflow) => (
                     <TableRow 
                       key={workflow.run.id} 
                       hover

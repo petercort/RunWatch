@@ -67,24 +67,28 @@ export const getAllWorkflowRuns = async (req, res) => {
 
 export const getRepoWorkflowRuns = async (req, res) => {
   try {
-    // Extract the full repository path from the URL
-    const repoPath = req.params[0]; // This gets everything after /workflow-runs/repo/
+    const repoPath = req.params[0];
     if (!repoPath) {
       return errorResponse(res, 'Repository name is required', 400);
     }
 
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 30;
+    const workflowName = req.query.workflowName ? decodeURIComponent(req.query.workflowName) : null;
     const skip = (page - 1) * pageSize;
 
-    // Get total count for pagination
-    const totalCount = await WorkflowRun.countDocuments({
+    // Build query with workflow name filter if provided
+    const query = {
       'repository.fullName': repoPath
-    });
+    };
+    if (workflowName) {
+      query['workflow.name'] = workflowName;
+    }
 
-    const workflowRuns = await WorkflowRun.find({
-      'repository.fullName': repoPath
-    })
+    // Get total count for pagination with the workflow filter
+    const totalCount = await WorkflowRun.countDocuments(query);
+
+    const workflowRuns = await WorkflowRun.find(query)
       .sort({ 'run.created_at': -1 })
       .skip(skip)
       .limit(pageSize);

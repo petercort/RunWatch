@@ -30,11 +30,13 @@ const apiService = {
   },
 
   // Get workflow runs for a specific repository
-  getRepoWorkflowRuns: async (repoName, page = 1, pageSize = 30) => {
+  getRepoWorkflowRuns: async (repoName, page = 1, pageSize = 30, workflowName = null) => {
     try {
-      const response = await axios.get(`${API_URL}/workflow-runs/repo/${repoName}`, {
-        params: { page, pageSize }
-      });
+      const params = { page, pageSize };
+      if (workflowName) {
+        params.workflowName = encodeURIComponent(workflowName);
+      }
+      const response = await axios.get(`${API_URL}/workflow-runs/repo/${repoName}`, { params });
       return response.data.data || { data: [], pagination: { total: 0, page: 1, pageSize: 30, totalPages: 1 } };
     } catch (error) {
       console.error(`Error fetching workflow runs for repo ${repoName}:`, error);
