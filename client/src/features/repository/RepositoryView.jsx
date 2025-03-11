@@ -230,7 +230,7 @@ const RepositoryView = () => {
       <Box sx={{ 
         display: 'flex', 
         alignItems: 'center', 
-        mb: 4,
+        mb: 3,
         background: 'linear-gradient(90deg, rgba(88, 166, 255, 0.1) 0%, rgba(88, 166, 255, 0.05) 100%)',
         p: 3,
         borderRadius: '12px',
@@ -271,58 +271,58 @@ const RepositoryView = () => {
         </Button>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={2}>
         {/* Overview Stats */}
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={3}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <AssessmentIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Total Runs</Typography>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <AssessmentIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Total Runs</Typography>
               </Box>
-              <Typography variant="h4" sx={{ color: '#E6EDF3' }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
                 {stats.totalRuns}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={3}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TrendingUpIcon sx={{ color: '#23C562', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Success Rate</Typography>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <TrendingUpIcon sx={{ color: '#23C562', mr: 1, fontSize: '1rem' }} />
+                <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Success Rate</Typography>
               </Box>
-              <Typography variant="h4" sx={{ color: '#E6EDF3' }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
                 {stats.successRate.toFixed(1)}%
               </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={3}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <BugIcon sx={{ color: '#F85149', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Failed Runs</Typography>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <BugIcon sx={{ color: '#F85149', mr: 1, fontSize: '1rem' }} />
+                <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Failed Runs</Typography>
               </Box>
-              <Typography variant="h4" sx={{ color: '#E6EDF3' }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
                 {stats.failedRuns}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={3}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TimeIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Avg. Duration</Typography>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <TimeIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Avg. Duration</Typography>
               </Box>
-              <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
                 {formatDuration(stats.avgDuration)}
               </Typography>
             </CardContent>
@@ -330,17 +330,20 @@ const RepositoryView = () => {
         </Grid>
 
         {/* Activity Trends Chart */}
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Paper elevation={0} sx={{ 
-            p: 3,
+            p: 2,
+            height: '100%',
             bgcolor: '#161B22',
             borderRadius: '12px',
-            border: '1px solid rgba(240, 246, 252, 0.1)'
+            border: '1px solid rgba(240, 246, 252, 0.1)',
+            display: 'flex',
+            flexDirection: 'column'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2, fontSize: '1rem' }}>
               30-Day Activity Trends
             </Typography>
-            <Box sx={{ height: 300 }}>
+            <Box sx={{ flex: 1, minHeight: 250 }}>
               <Line
                 data={stats.activityTrends}
                 options={{
@@ -352,8 +355,7 @@ const RepositoryView = () => {
                   },
                   plugins: {
                     legend: {
-                      position: 'top',
-                      labels: { color: '#8B949E' }
+                      display: false
                     }
                   },
                   scales: {
@@ -377,17 +379,20 @@ const RepositoryView = () => {
         </Grid>
 
         {/* Workflow Comparison */}
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Paper elevation={0} sx={{ 
-            p: 3,
+            p: 2,
+            height: '100%',
             bgcolor: '#161B22',
             borderRadius: '12px',
-            border: '1px solid rgba(240, 246, 252, 0.1)'
+            border: '1px solid rgba(240, 246, 252, 0.1)',
+            display: 'flex',
+            flexDirection: 'column'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2, fontSize: '1rem' }}>
               Workflow Comparison
             </Typography>
-            <Box sx={{ height: 300 }}>
+            <Box sx={{ flex: 1, minHeight: 250 }}>
               <Bar
                 data={stats.workflowComparison}
                 options={{
@@ -396,7 +401,7 @@ const RepositoryView = () => {
                   plugins: {
                     legend: {
                       position: 'top',
-                      labels: { color: '#8B949E' }
+                      labels: { color: '#8B949E', boxHeight: 8, padding: 8 }
                     }
                   },
                   scales: {
@@ -419,12 +424,12 @@ const RepositoryView = () => {
         {/* Workflow Details */}
         <Grid item xs={12}>
           <Paper elevation={0} sx={{ 
-            p: 3,
+            p: 2,
             bgcolor: '#161B22',
             borderRadius: '12px',
             border: '1px solid rgba(240, 246, 252, 0.1)'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2, fontSize: '1rem' }}>
               Workflows
             </Typography>
             <Stack spacing={2}>
