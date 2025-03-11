@@ -191,3 +191,79 @@ export const getActiveMetrics = async (req, res) => {
     return errorResponse(res, 'Error retrieving active workflow metrics', 500, error);
   }
 };
+
+export const createBackup = async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const collections = await db.collections();
+    const backup = {};
+
+    for (const collection of collections) {
+      const documents = await collection.find({}).toArray();
+      backup[collection.collectionName] = documents;
+    }
+
+    return successResponse(res, backup);
+  } catch (error) {
+    return errorResponse(res, 'Error creating database backup', 500, error);
+  }
+};
+
+export const restoreBackup = async (req, res) => {
+  try {
+    const backupData = req.body.data || req.body;
+    const db = mongoose.connection.db;
+    
+    // Validate backup data structure
+    if (!backupData || typeof backupData !== 'object') {
+      return errorResponse(res, 'Invalid backup data', 400);
+    }
+
+    // Store restore statistics
+    const stats = {
+      collectionsProcessed: 0,
+      documentsRestored: 0,
+      errors: []
+    };
+
+    // Drop existing collections and restore from backup
+    for (const [collectionName, documents] of Object.entries(backupData)) {
+      if (Array.isArray(documents)) {
+        try {
+          // Drop existing collection
+          try {
+            await db.collection(collectionName).drop();
+          } catch (err) {
+            // Collection might not exist, continue
+          }
+
+          // Restore documents if there are any
+          if (documents.length > 0) {
+            await db.collection(collectionName).insertMany(documents);
+            stats.collectionsProcessed++;
+            stats.documentsRestored += documents.length;
+          }
+        } catch (error) {
+          stats.errors.push({
+            collection: collectionName,
+            error: error.message
+          });
+        }
+      }
+    }
+
+    // Get updated database stats
+    const dbStats = await db.stats();
+    
+    return successResponse(res, { 
+      message: 'Database restored successfully',
+      stats: {
+        ...stats,
+        databaseSize: dbStats.dataSize,
+        totalCollections: dbStats.collections
+      }
+    });
+  } catch (error) {
+    return errorResponse(res, 'Error restoring database backup', 500, error);
+  }
+};

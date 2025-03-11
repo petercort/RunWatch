@@ -40,6 +40,10 @@ router.post('/workflow-runs/:runId/jobs', workflowController.updateWorkflowJobs)
 // Database status endpoint
 router.get('/db/status', workflowController.getDatabaseStatus);
 
+// Database backup routes
+router.get('/database/backup', workflowController.createBackup);
+router.post('/database/restore', workflowController.restoreBackup);
+
 // Get available organizations
 router.get('/organizations', async (req, res) => {
     try {

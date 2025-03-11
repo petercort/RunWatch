@@ -153,6 +153,18 @@ const apiService = {
       console.error('Error fetching active metrics:', error);
       throw error;
     }
+  },
+  
+  // Create database backup
+  async createDatabaseBackup() {
+    const response = await axios.get(`${API_URL}/database/backup`);
+    return response.data;
+  },
+
+  // Restore database backup
+  async restoreDatabaseBackup(backupData) {
+    const response = await axios.post(`${API_URL}/database/restore`, backupData);
+    return response.data;
   }
 };
 
