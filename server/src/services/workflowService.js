@@ -12,76 +12,58 @@ export const processWorkflowRun = async (payload) => {
   const { repository, workflow_run: run } = payload;
   
   try {
-    // First try to find by run ID
-    let workflowRun = await WorkflowRun.findOne({ 'run.id': run.id });
-    
-    if (!workflowRun) {
-      // Create new workflow run logic...
-      workflowRun = new WorkflowRun({
-        repository: {
-          id: repository.id,
-          name: repository.name,
-          fullName: repository.full_name,
-          owner: {
-            login: repository.owner.login,
-            url: transformGitHubUrl(repository.owner.html_url)
-          },
-          url: transformGitHubUrl(repository.html_url)
+    // Create the workflow run data object
+    const workflowRunData = {
+      repository: {
+        id: repository.id,
+        name: repository.name,
+        fullName: repository.full_name,
+        owner: {
+          login: repository.owner.login,
+          url: transformGitHubUrl(repository.owner.html_url)
         },
-        workflow: {
-          id: run.workflow_id,
-          name: run.name,
-          path: run.path
-        },
-        run: {
-          id: run.id,
-          number: run.run_number,
-          created_at: run.created_at,
-          updated_at: run.updated_at,
-          status: run.status,
-          conclusion: run.status === 'completed' ? run.conclusion : null, // Only set conclusion if completed
-          url: transformGitHubUrl(run.html_url),
-          head_branch: run.head_branch,
-          event: run.event,
-          labels: run.labels || [],  // Just store the array as is, no mapping needed
-          runner_id: run.runner_id,
-          runner_name: run.runner_name,
-          runner_group_id: run.runner_group_id,
-          runner_group_name: run.runner_group_name
-        }
-      });
-    } else {
-      // Update existing workflow run
-      workflowRun.workflow.id = run.workflow_id;
-      workflowRun.workflow.name = run.name;
-      workflowRun.workflow.path = run.path;
-      workflowRun.run.status = run.status;
-      // Only update conclusion if the status is completed or if we're transitioning from completed
-      if (run.status === 'completed') {
-        workflowRun.run.conclusion = run.conclusion;
-      } else if (run.status !== 'completed') {
-        workflowRun.run.conclusion = null; // Reset conclusion for non-completed states
+        url: transformGitHubUrl(repository.html_url)
+      },
+      workflow: {
+        id: run.workflow_id,
+        name: run.name,
+        path: run.path
+      },
+      run: {
+        id: run.id,
+        number: run.run_number,
+        created_at: run.created_at,
+        updated_at: run.updated_at,
+        status: run.status,
+        conclusion: run.status === 'completed' ? run.conclusion : null,
+        url: transformGitHubUrl(run.html_url),
+        head_branch: run.head_branch,
+        event: run.event,
+        labels: run.labels || [],
+        runner_id: run.runner_id,
+        runner_name: run.runner_name,
+        runner_group_id: run.runner_group_id,
+        runner_group_name: run.runner_group_name
       }
-      workflowRun.run.updated_at = run.updated_at;
-      workflowRun.run.url = transformGitHubUrl(run.html_url);
-      workflowRun.run.head_branch = run.head_branch;
-      workflowRun.run.event = run.event;
-      if (run.labels) {
-        workflowRun.run.labels = run.labels;
-      }
-      workflowRun.run.runner_id = run.runner_id;
-      workflowRun.run.runner_name = run.runner_name;
-      workflowRun.run.runner_group_id = run.runner_group_id;
-      workflowRun.run.runner_group_name = run.runner_group_name;
-    }
+    };
 
     console.log('Saving workflow run:', {
-      id: workflowRun.run.id,
-      status: workflowRun.run.status,
-      conclusion: workflowRun.run.conclusion
+      id: run.id,
+      status: run.status,
+      conclusion: run.conclusion
     });
 
-    await workflowRun.save();
+    // Use findOneAndUpdate with upsert to either update existing or create new
+    const workflowRun = await WorkflowRun.findOneAndUpdate(
+      { 'run.id': run.id },
+      workflowRunData,
+      { 
+        new: true, // Return the updated document
+        upsert: true, // Create if it doesn't exist
+        runValidators: true // Run model validators
+      }
+    );
+
     return workflowRun;
   } catch (error) {
     console.error('Error processing workflow run:', error);
@@ -91,13 +73,7 @@ export const processWorkflowRun = async (payload) => {
 
 export const updateWorkflowJobs = async (runId, jobs) => {
   try {
-    const workflowRun = await WorkflowRun.findOne({ 'run.id': runId });
-    
-    if (!workflowRun) {
-      throw new Error('Workflow run not found');
-    }
-
-    workflowRun.jobs = jobs.map(job => ({
+    const jobsData = jobs.map(job => ({
       id: job.id,
       name: job.name,
       status: job.status,
@@ -121,7 +97,19 @@ export const updateWorkflowJobs = async (runId, jobs) => {
       }))
     }));
 
-    await workflowRun.save();
+    const workflowRun = await WorkflowRun.findOneAndUpdate(
+      { 'run.id': runId },
+      { $set: { jobs: jobsData } },
+      { 
+        new: true,
+        runValidators: true
+      }
+    );
+    
+    if (!workflowRun) {
+      throw new Error('Workflow run not found');
+    }
+
     return workflowRun;
   } catch (error) {
     console.error('Error updating workflow jobs:', error);
@@ -195,162 +183,154 @@ export const processWorkflowJobEvent = async (payload) => {
       status: workflow_job.status
     });
 
-    // First try to find by run ID
-    let workflowRun = await WorkflowRun.findOne({ 'run.id': workflow_job.run_id });
-    
-    // If not found by run ID, check if we have a duplicate by run number and workflow name
-    if (!workflowRun) {
-      workflowRun = await WorkflowRun.findOne({
-        'repository.fullName': repository.full_name,
-        'workflow.name': workflow_job.workflow_name,
-        'run.number': workflow_job.run_number
-      });
-      
-      // If still not found, create new workflow run
-      if (!workflowRun) {
-        workflowRun = new WorkflowRun({
-          repository: {
-            id: repository.id,
-          name: repository.name,
-          fullName: repository.full_name,
-          owner: {
-            login: repository.owner.login,
-            url: transformGitHubUrl(repository.owner.url)
-          },
-          url: transformGitHubUrl(repository.url)
-        },
-        workflow: {
-          id: null,
-          name: workflow_job.workflow_name,
-          path: null
-        },
-        run: {
-          id: workflow_job.run_id,
-          number: workflow_job.run_number,
-          created_at: workflow_job.created_at,
-          updated_at: workflow_job.started_at || workflow_job.created_at,
-          status: workflow_job.status,
-          conclusion: workflow_job.conclusion,
-          url: transformGitHubUrl(workflow_job.run_url),
-          labels: workflow_job.labels || [],
-          runner_id: workflow_job.runner_id,
-          runner_name: workflow_job.runner_name,
-          runner_group_id: workflow_job.runner_group_id,
-          runner_group_name: workflow_job.runner_group_name
+    const processGitHubRunnerInfo = (job) => {
+      let runnerOs = '';
+      let runnerVersion = '';
+      let imageVersion = '';
+
+      if (job.labels) {
+        const osLabel = job.labels.find(l => l.match(/^(ubuntu|windows|macos)/));
+        if (osLabel) {
+          const [os, version] = osLabel.split('-');
+          runnerOs = os;
+          imageVersion = version;
         }
-      });
-    }
-  }
 
-  // Update existing run with any new information from the job
-  if (workflow_job.labels && workflow_job.labels.length > 0) {
-    workflowRun.run.labels = workflow_job.labels;
-    console.log('Updated labels for run:', workflow_job.labels);
-  }
-  // Note: If no labels in the job event, we preserve existing labels
-
-  // Update or add the job information
-  const jobIndex = workflowRun.jobs?.findIndex(job => job.id === workflow_job.id) ?? -1;
-
-  const processGitHubRunnerInfo = (job) => {
-    let runnerOs = '';
-    let runnerVersion = '';
-    let imageVersion = '';
-
-    if (job.labels) {
-      // GitHub-hosted runners have labels like "ubuntu-latest", "ubuntu-22.04", "windows-2022"
-      const osLabel = job.labels.find(l => l.match(/^(ubuntu|windows|macos)/));
-      if (osLabel) {
-        const [os, version] = osLabel.split('-');
-        runnerOs = os;
-        imageVersion = version;
-      }
-
-      // Look for version in GitHub Actions label like "GitHub Actions (413)"
-      const githubLabel = job.labels.find(l => l.includes('GitHub Actions'));
-      if (githubLabel) {
-        const match = githubLabel.match(/\((.*?)\)/);
-        if (match) {
-          runnerVersion = match[1];
+        const githubLabel = job.labels.find(l => l.includes('GitHub Actions'));
+        if (githubLabel) {
+          const match = githubLabel.match(/\((.*?)\)/);
+          if (match) {
+            runnerVersion = match[1];
+          }
         }
       }
-    }
 
-    return {
-      runner_os: runnerOs,
-      runner_version: runnerVersion,
-      runner_image_version: imageVersion
+      return {
+        runner_os: runnerOs,
+        runner_version: runnerVersion,
+        runner_image_version: imageVersion
+      };
     };
-  };
 
-  const updatedJob = {
-    id: workflow_job.id,
-    name: workflow_job.name,
-    status: workflow_job.status,
-    conclusion: workflow_job.conclusion,
-    started_at: workflow_job.started_at,
-    completed_at: workflow_job.completed_at,
-    runner_id: workflow_job.runner_id,
-    runner_name: workflow_job.runner_name,
-    runner_group_id: workflow_job.runner_group_id,
-    runner_group_name: workflow_job.runner_group_name,
-    ...processGitHubRunnerInfo(workflow_job),
-    steps: workflow_job.steps?.map(step => ({
-      name: step.name,
-      status: step.status,
-      conclusion: step.conclusion,
-      number: step.number,
-      started_at: step.started_at,
-      completed_at: step.completed_at
-    })) || []
-  };
+    // Prepare the update data
+    const workflowRunData = {
+      repository: {
+        id: repository.id,
+        name: repository.name,
+        fullName: repository.full_name,
+        owner: {
+          login: repository.owner.login,
+          url: transformGitHubUrl(repository.owner.url)
+        },
+        url: transformGitHubUrl(repository.url)
+      },
+      workflow: {
+        name: workflow_job.workflow_name
+      },
+      run: {
+        id: workflow_job.run_id,
+        number: workflow_job.run_number,
+        created_at: workflow_job.created_at,
+        updated_at: workflow_job.started_at || workflow_job.created_at,
+        status: workflow_job.status === 'in_progress' ? 'in_progress' : workflow_job.status,
+        conclusion: workflow_job.conclusion,
+        url: transformGitHubUrl(workflow_job.run_url),
+        labels: workflow_job.labels || [],
+        runner_id: workflow_job.runner_id,
+        runner_name: workflow_job.runner_name,
+        runner_group_id: workflow_job.runner_group_id,
+        runner_group_name: workflow_job.runner_group_name
+      }
+    };
 
-  if (jobIndex === -1) {
-    if (!workflowRun.jobs) workflowRun.jobs = [];
-    workflowRun.jobs.push(updatedJob);
-  } else {
-    workflowRun.jobs[jobIndex] = updatedJob;
+    const updatedJob = {
+      id: workflow_job.id,
+      name: workflow_job.name,
+      status: workflow_job.status,
+      conclusion: workflow_job.conclusion,
+      started_at: workflow_job.started_at,
+      completed_at: workflow_job.completed_at,
+      runner_id: workflow_job.runner_id,
+      runner_name: workflow_job.runner_name,
+      runner_group_id: workflow_job.runner_group_id,
+      runner_group_name: workflow_job.runner_group_name,
+      ...processGitHubRunnerInfo(workflow_job),
+      steps: workflow_job.steps?.map(step => ({
+        name: step.name,
+        status: step.status,
+        conclusion: step.conclusion,
+        number: step.number,
+        started_at: step.started_at,
+        completed_at: step.completed_at
+      })) || []
+    };
+
+    // Find and update the workflow run, if it exists
+    const existingRun = await WorkflowRun.findOne({ 'run.id': workflow_job.run_id });
+
+    if (existingRun) {
+      // If the run exists, update the job
+      const jobIndex = existingRun.jobs?.findIndex(job => job.id === workflow_job.id) ?? -1;
+      let jobsUpdate;
+
+      if (jobIndex === -1) {
+        // Add new job
+        jobsUpdate = { $push: { jobs: updatedJob } };
+      } else {
+        // Update existing job
+        jobsUpdate = { 
+          $set: { 
+            [`jobs.${jobIndex}`]: updatedJob,
+            'run.status': workflow_job.status === 'in_progress' ? 'in_progress' : existingRun.run.status,
+            'run.labels': workflow_job.labels || existingRun.run.labels
+          } 
+        };
+      }
+
+      const workflowRun = await WorkflowRun.findOneAndUpdate(
+        { 'run.id': workflow_job.run_id },
+        jobsUpdate,
+        { new: true, runValidators: true }
+      );
+
+      return workflowRun;
+    } else {
+      // If the run doesn't exist, create a new one with the job
+      workflowRunData.jobs = [updatedJob];
+      
+      const workflowRun = await WorkflowRun.findOneAndUpdate(
+        { 'run.id': workflow_job.run_id },
+        workflowRunData,
+        { 
+          new: true,
+          upsert: true,
+          runValidators: true
+        }
+      );
+
+      return workflowRun;
+    }
+
+  } catch (error) {
+    console.error('Error processing workflow job:', error);
+    throw error;
   }
-
-  // If any job is in_progress, update the overall run status
-  if (updatedJob.status === 'in_progress') {
-    workflowRun.run.status = 'in_progress';
-  }
-
-  // Update run number if it's not set and we have it from the job
-  if (!workflowRun.run.number && workflow_job.run_number) {
-    workflowRun.run.number = workflow_job.run_number;
-  }
-
-  // Update labels if they exist in the workflow_job
-  if (workflow_job.labels) {
-    workflowRun.run.labels = workflow_job.labels;
-  }
-
-  await workflowRun.save();
-  console.log('Saved workflow run with labels:', workflowRun.run.labels);
-  return workflowRun;
-} catch (error) {
-  console.error('Error processing workflow job:', error);
-  throw error;
-}
 };
 
 export const syncWorkflowRun = async (runId) => {
   try {
-    // Find the workflow run in our database
-    const workflowRun = await WorkflowRun.findOne({ 'run.id': runId });
+    // Find the workflow run in our database, explicitly select run.id to avoid _id confusion
+    const workflowRun = await WorkflowRun.findOne({ 'run.id': runId }).select('+run.id');
     if (!workflowRun) {
       throw new Error('Workflow run not found');
     }
 
     // Get the necessary GitHub installation details
-    const { Octokit } = await import('@octokit/rest');
     const { getGitHubClient } = await import('../utils/githubAuth.js');
     const [owner] = workflowRun.repository.fullName.split('/');
 
     // First get the app client to list installations
-    const { app, installations } = await getGitHubClient();
+    const { installations } = await getGitHubClient();
     
     // Find the installation for this owner
     const installation = installations.find(i => i.account.login.toLowerCase() === owner.toLowerCase());
@@ -388,7 +368,7 @@ export const syncWorkflowRun = async (runId) => {
       page++;
     }
 
-    // Update the workflow run in our database
+    // Process the workflow run update with the new data
     const payload = {
       workflow_run: run,
       repository: {
@@ -401,7 +381,7 @@ export const syncWorkflowRun = async (runId) => {
       }
     };
 
-    // Process the workflow run update
+    // Process the run update
     const updatedRun = await processWorkflowRun(payload);
 
     // Update jobs if available
