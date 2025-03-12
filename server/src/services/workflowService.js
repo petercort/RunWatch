@@ -396,6 +396,133 @@ export const syncWorkflowRun = async (runId) => {
   }
 };
 
+export const syncRepositoryWorkflowRuns = async (repoPath) => {
+  try {
+    const [owner, repo] = repoPath.split('/');
+    if (!owner || !repo) {
+      throw new Error('Invalid repository path format');
+    }
+
+    // Get the necessary GitHub installation details
+    const { getGitHubClient } = await import('../utils/githubAuth.js');
+    
+    // First get the app client to list installations
+    const { installations } = await getGitHubClient();
+    
+    // Find the installation for this owner
+    const installation = installations.find(i => i.account.login.toLowerCase() === owner.toLowerCase());
+    if (!installation) {
+      throw new Error(`No GitHub App installation found for ${owner}`);
+    }
+
+    // Get a client for this specific installation
+    const { app: octokitWithAuth } = await getGitHubClient(installation.id);
+
+    // Get all workflows for the repository
+    const workflows = [];
+    let page = 1;
+    while (true) {
+      const { data: { workflows: workflowsPage } } = await octokitWithAuth.rest.actions.listRepoWorkflows({
+        owner,
+        repo,
+        per_page: 100,
+        page
+      });
+
+      if (workflowsPage.length === 0) break;
+      workflows.push(...workflowsPage);
+      page++;
+    }
+
+    const updatedRuns = [];
+
+    // For each workflow, get recent runs
+    for (const workflow of workflows) {
+      // Get workflow runs with pagination
+      const runs = [];
+      page = 1;
+      
+      while (runs.length < 100) { // Limit to last 100 runs per workflow
+        const { data: { workflow_runs: runsPage } } = await octokitWithAuth.rest.actions.listWorkflowRuns({
+          owner,
+          repo,
+          workflow_id: workflow.id,
+          per_page: Math.min(100, 100 - runs.length),
+          page
+        });
+
+        if (runsPage.length === 0) break;
+        
+        // Validate and normalize run status
+        runsPage.forEach(run => {
+          // Normalize status
+          if (!['completed', 'action_required', 'cancelled', 'failure', 'neutral', 
+               'skipped', 'stale', 'success', 'timed_out', 'in_progress', 'queued', 
+               'requested', 'waiting', 'pending'].includes(run.status)) {
+            run.status = 'pending';
+          }
+          
+          // Normalize conclusion
+          if (run.conclusion && !['success', 'failure', 'cancelled', 'skipped', 'timed_out', 
+                                'action_required', 'neutral', 'stale', 'startup_failure'].includes(run.conclusion)) {
+            run.conclusion = null;
+          }
+        });
+
+        runs.push(...runsPage);
+        page++;
+      }
+
+      // Process each run
+      for (const run of runs) {
+        // Fetch jobs for the run
+        const jobs = [];
+        page = 1;
+        
+        while (true) {
+          const { data: { jobs: jobsPage } } = await octokitWithAuth.rest.actions.listJobsForWorkflowRun({
+            owner,
+            repo,
+            run_id: run.id,
+            per_page: 100,
+            page
+          });
+
+          if (jobsPage.length === 0) break;
+          jobs.push(...jobsPage);
+          page++;
+        }
+
+        // Process workflow run with jobs
+        const workflowRunPayload = {
+          workflow_run: run,
+          repository: {
+            id: run.repository.id,
+            name: repo,
+            full_name: `${owner}/${repo}`,
+            owner: {
+              login: owner
+            }
+          }
+        };
+
+        const workflowRun = await processWorkflowRun(workflowRunPayload);
+
+        if (jobs.length > 0) {
+          await updateWorkflowJobs(run.id, jobs);
+        }
+
+        updatedRuns.push(workflowRun);
+      }
+    }
+
+    return updatedRuns;
+  } catch (error) {
+    console.error('Error syncing repository workflow runs:', error);
+    throw error;
+  }
+};
+
 export const getActiveWorkflowMetrics = async () => {
   try {
     console.log('Starting to calculate active workflow metrics...');

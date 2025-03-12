@@ -66,6 +66,17 @@ const apiService = {
     }
   },
 
+  // Sync all workflow runs for a repository
+  syncWorkflowRuns: async (repoName) => {
+    try {
+      const response = await axios.post(`${API_URL}/workflow-runs/repo/${repoName}/sync`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Error syncing workflow runs for repo ${repoName}:`, error);
+      throw error;
+    }
+  },
+
   // Get workflow statistics
   getWorkflowStats: async () => {
     try {

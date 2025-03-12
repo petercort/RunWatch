@@ -22,6 +22,9 @@ router.get('/workflow-runs', workflowController.getAllWorkflowRuns);
 // Get workflow runs for a specific repository
 router.get('/workflow-runs/repo/*', workflowController.getRepoWorkflowRuns);
 
+// Sync all workflow runs for a repository
+router.post('/workflow-runs/repo/*/sync', workflowController.syncRepositoryWorkflowRuns);
+
 // Get workflow statistics
 router.get('/stats', workflowController.getWorkflowStats);
 

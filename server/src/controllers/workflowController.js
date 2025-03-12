@@ -180,6 +180,28 @@ export const syncWorkflowRun = async (req, res) => {
   }
 };
 
+export const syncRepositoryWorkflowRuns = async (req, res) => {
+  try {
+    const repoPath = req.params[0];
+    if (!repoPath) {
+      return errorResponse(res, 'Repository name is required', 400);
+    }
+
+    const workflowRuns = await workflowService.syncRepositoryWorkflowRuns(repoPath);
+
+    // After sync is complete, emit updates for each workflow run
+    if (req.io) {
+      workflowRuns.forEach(run => {
+        req.io.emit('workflowUpdate', run);
+      });
+    }
+
+    return successResponse(res, workflowRuns);
+  } catch (error) {
+    return errorResponse(res, 'Error syncing repository workflow runs', 500, error);
+  }
+};
+
 export const getActiveMetrics = async (req, res) => {
   try {
     console.log('Getting active workflow metrics...');

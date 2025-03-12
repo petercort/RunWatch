@@ -34,6 +34,7 @@ const RepositoryView = () => {
   const navigate = useNavigate();
   const [repository, setRepository] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
   const [pagination, setPagination] = useState({
@@ -153,37 +154,37 @@ const RepositoryView = () => {
     };
   };
 
-  useEffect(() => {
-    const fetchRepositoryData = async () => {
-      try {
-        setLoading(true);
-        const response = await apiService.getRepoWorkflowRuns(
-          decodeURIComponent(repoName),
-          pagination.page,
-          pagination.pageSize
-        );
-        const repoWorkflows = response.data;
-        
-        if (repoWorkflows.length > 0) {
-          const repoInfo = repoWorkflows[0].repository;
-          setRepository(repoInfo);
-          setStats(calculateRepoStats(repoWorkflows));
-          setPagination(prevPagination => ({
-            ...prevPagination,
-            ...response.pagination
-          }));
-          setError(null);
-        } else {
-          setError('Repository not found');
-        }
-      } catch (err) {
-        setError('Failed to fetch repository data. Please try again later.');
-        console.error(err);
-      } finally {
-        setLoading(false);
+  const fetchRepositoryData = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.getRepoWorkflowRuns(
+        decodeURIComponent(repoName),
+        pagination.page,
+        pagination.pageSize
+      );
+      const repoWorkflows = response.data;
+      
+      if (repoWorkflows.length > 0) {
+        const repoInfo = repoWorkflows[0].repository;
+        setRepository(repoInfo);
+        setStats(calculateRepoStats(repoWorkflows));
+        setPagination(prevPagination => ({
+          ...prevPagination,
+          ...response.pagination
+        }));
+        setError(null);
+      } else {
+        setError('Repository not found');
       }
-    };
+    } catch (err) {
+      setError('Failed to fetch repository data. Please try again later.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchRepositoryData();
 
     // Set up socket listeners for real-time updates
@@ -200,6 +201,21 @@ const RepositoryView = () => {
       cleanupListeners();
     };
   }, [repoName, pagination.page, pagination.pageSize]);
+
+  const handleSyncAll = async () => {
+    try {
+      setSyncing(true);
+      await apiService.syncWorkflowRuns(decodeURIComponent(repoName));
+      // Refresh the data to get the latest stats
+      await fetchRepositoryData();
+      setError(null);
+    } catch (err) {
+      setError('Failed to sync workflow runs. Please try again later.');
+      console.error(err);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -254,6 +270,23 @@ const RepositoryView = () => {
             {repository.fullName}
           </Typography>
         </Box>
+        <Button
+          variant="outlined"
+          startIcon={<ScheduleIcon />}
+          onClick={handleSyncAll}
+          disabled={syncing}
+          sx={{ 
+            mr: 1,
+            borderColor: 'rgba(88, 166, 255, 0.2)',
+            color: '#58A6FF',
+            '&:hover': {
+              borderColor: 'rgba(88, 166, 255, 0.5)',
+              bgcolor: 'rgba(88, 166, 255, 0.1)'
+            }
+          }}
+        >
+          {syncing ? 'Syncing...' : 'Sync All'}
+        </Button>
         <Button
           variant="outlined"
           startIcon={<GitHubIcon />}
