@@ -37,16 +37,11 @@ const RepositoryView = () => {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    pageSize: 30,
-    totalPages: 1
-  });
 
   const calculateRepoStats = (runs) => {
     if (!runs.length) return null;
 
+    // Initialize stats for all workflows
     const workflowStats = {};
     let totalRuns = 0;
     let successfulRuns = 0;
@@ -54,15 +49,34 @@ const RepositoryView = () => {
     let totalDuration = 0;
     let durationCount = 0;
 
+    // First initialize stats for all workflows in repository
+    const allWorkflows = runs[0]?.repository?.workflows || [];
+    allWorkflows.forEach(workflow => {
+      workflowStats[workflow.name] = {
+        total: 0,
+        successful: 0,
+        failed: 0,
+        durations: [],
+        lastRun: null,
+        path: workflow.path,
+        state: workflow.state,
+        lastSyncedAt: workflow.lastSyncedAt
+      };
+    });
+
+    // Then update stats for workflows that have runs
     runs.forEach(run => {
       const workflowName = run.workflow.name;
       if (!workflowStats[workflowName]) {
+        // This shouldn't happen normally but handle it just in case
         workflowStats[workflowName] = {
           total: 0,
           successful: 0,
           failed: 0,
           durations: [],
           lastRun: null,
+          path: run.workflow.path,
+          state: 'active'
         };
       }
 
@@ -88,8 +102,9 @@ const RepositoryView = () => {
         durationCount++;
       }
 
-      if (!stats.lastRun || new Date(run.run.updated_at) > new Date(stats.lastRun)) {
-        stats.lastRun = run.run.updated_at;
+      // Update lastRun if this run is more recent
+      if (!stats.lastRun || new Date(run.run.created_at) > new Date(stats.lastRun)) {
+        stats.lastRun = run.run.created_at;
       }
     });
 
@@ -158,9 +173,7 @@ const RepositoryView = () => {
     try {
       setLoading(true);
       const response = await apiService.getRepoWorkflowRuns(
-        decodeURIComponent(repoName),
-        pagination.page,
-        pagination.pageSize
+        decodeURIComponent(repoName)
       );
       const repoWorkflows = response.data;
       
@@ -168,10 +181,6 @@ const RepositoryView = () => {
         const repoInfo = repoWorkflows[0].repository;
         setRepository(repoInfo);
         setStats(calculateRepoStats(repoWorkflows));
-        setPagination(prevPagination => ({
-          ...prevPagination,
-          ...response.pagination
-        }));
         setError(null);
       } else {
         setError('Repository not found');
@@ -200,7 +209,7 @@ const RepositoryView = () => {
     return () => {
       cleanupListeners();
     };
-  }, [repoName, pagination.page, pagination.pageSize]);
+  }, [repoName]);
 
   const handleSyncAll = async () => {
     try {
@@ -215,6 +224,13 @@ const RepositoryView = () => {
     } finally {
       setSyncing(false);
     }
+  };
+
+  const navigateToWorkflowHistory = (workflowName) => {
+    // First encode both parameters for the URL
+    const encodedRepoName = encodeURIComponent(repoName);
+    const encodedWorkflowName = encodeURIComponent(workflowName);
+    navigate(`/workflow-history/${encodedRepoName}/${encodedWorkflowName}`);
   };
 
   if (loading) {
@@ -462,9 +478,11 @@ const RepositoryView = () => {
             borderRadius: '12px',
             border: '1px solid rgba(240, 246, 252, 0.1)'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2, fontSize: '1rem' }}>
-              Workflows
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1rem' }}>
+                Workflows ({Object.keys(stats.workflowStats).length})
+              </Typography>
+            </Box>
             <Stack spacing={2}>
               {Object.entries(stats.workflowStats).map(([name, workflowStat]) => (
                 <Paper
@@ -480,7 +498,7 @@ const RepositoryView = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
                       <Typography 
-                        onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoName)}/${encodeURIComponent(name)}`)}
+                        onClick={() => navigateToWorkflowHistory(name)}
                         sx={{ 
                           color: '#E6EDF3',
                           fontWeight: 500,

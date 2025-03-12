@@ -418,7 +418,7 @@ export const syncRepositoryWorkflowRuns = async (repoPath) => {
     // Get a client for this specific installation
     const { app: octokitWithAuth } = await getGitHubClient(installation.id);
 
-    // Get all workflows for the repository
+    // Get all workflows for the repository first
     const workflows = [];
     let page = 1;
     while (true) {
@@ -433,6 +433,26 @@ export const syncRepositoryWorkflowRuns = async (repoPath) => {
       workflows.push(...workflowsPage);
       page++;
     }
+
+    // Update or create repository document with all workflows
+    await WorkflowRun.findOneAndUpdate(
+      { 'repository.fullName': `${owner}/${repo}` },
+      {
+        $set: {
+          'repository.workflows': workflows.map(w => ({
+            id: w.id,
+            name: w.name,
+            path: w.path,
+            state: w.state,
+            lastSyncedAt: new Date()
+          }))
+        }
+      },
+      { 
+        upsert: true,
+        new: true
+      }
+    );
 
     const updatedRuns = [];
 

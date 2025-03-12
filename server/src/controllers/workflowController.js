@@ -68,38 +68,64 @@ export const getAllWorkflowRuns = async (req, res) => {
 export const getRepoWorkflowRuns = async (req, res) => {
   try {
     const repoPath = req.params[0];
+    const { workflowName } = req.query; // Get workflowName from query params
+
     if (!repoPath) {
       return errorResponse(res, 'Repository name is required', 400);
     }
 
-    const page = parseInt(req.query.page) || 1;
-    const pageSize = parseInt(req.query.pageSize) || 30;
-    const workflowName = req.query.workflowName ? decodeURIComponent(req.query.workflowName) : null;
-    const skip = (page - 1) * pageSize;
+    // First get the repository document to get all workflows
+    const repoDoc = await WorkflowRun.findOne({ 'repository.fullName': repoPath });
+    
+    if (!repoDoc) {
+      return successResponse(res, {
+        data: [],
+        pagination: { total: 0, page: 1, pageSize: 0, totalPages: 1 }
+      });
+    }
 
-    // Build query with workflow name filter if provided
-    const query = {
-      'repository.fullName': repoPath
-    };
+    // Get all runs with workflow name filter if provided
+    const query = { 'repository.fullName': repoPath };
     if (workflowName) {
       query['workflow.name'] = workflowName;
     }
 
-    // Get total count for pagination with the workflow filter
-    const totalCount = await WorkflowRun.countDocuments(query);
+    const runs = await WorkflowRun.find(query).sort({ 'run.created_at': -1 });
 
-    const workflowRuns = await WorkflowRun.find(query)
-      .sort({ 'run.created_at': -1 })
-      .skip(skip)
-      .limit(pageSize);
+    // Attach the full workflows list to each run
+    const runsWithWorkflows = runs.map(run => ({
+      ...run.toObject(),
+      repository: {
+        ...run.repository,
+        workflows: repoDoc.repository.workflows || []
+      }
+    }));
+
+    // If we have no runs but have workflows and a specific workflow was requested
+    if (runs.length === 0 && workflowName && repoDoc.repository.workflows?.length > 0) {
+      const requestedWorkflow = repoDoc.repository.workflows.find(w => w.name === workflowName);
+      if (requestedWorkflow) {
+        runsWithWorkflows.push({
+          repository: {
+            ...repoDoc.repository,
+            workflows: repoDoc.repository.workflows
+          },
+          workflow: {
+            id: requestedWorkflow.id,
+            name: requestedWorkflow.name,
+            path: requestedWorkflow.path
+          }
+        });
+      }
+    }
 
     return successResponse(res, {
-      data: workflowRuns,
+      data: runsWithWorkflows,
       pagination: {
-        total: totalCount,
-        page,
-        pageSize,
-        totalPages: Math.ceil(totalCount / pageSize)
+        total: runs.length,
+        page: 1,
+        pageSize: runs.length,
+        totalPages: 1
       }
     });
   } catch (error) {
