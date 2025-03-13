@@ -9,7 +9,7 @@ services:
     environment:
       MONGO_INITDB_DATABASE: runwatch
     volumes:
-      - mongodb_data_3:/data/db
+      - mongodb_data:/data/db
     ports:
       - "27017:27017"
     networks:
@@ -71,4 +71,4 @@ networks:
     driver: bridge
 
 volumes:
-  mongodb_data_3:
+  mongodb_data:
