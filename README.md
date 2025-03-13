@@ -55,28 +55,35 @@ The application is structured as follows:
 
 2. Configure the following environment variables in `.env`:
    ```
+   # Node environment
+   NODE_ENV=development          # Application environment (development/production)
+
    # Server Configuration
-   NODE_ENV=development
-   SERVER_PORT=5001
-   MONGODB_URI=mongodb://mongodb:27017/runwatch
+   PORT=5001                    # Port where the backend server will run
+   MONGODB_URI=mongodb://mongodb:27017/runwatch  # MongoDB connection string
 
    # GitHub Configuration
-   GITHUB_WEBHOOK_SECRET=your_github_webhook_secret
+   GITHUB_WEBHOOK_SECRET=your_github_webhook_secret      # Generated webhook secret
+   GITHUB_APP_ID=your_github_app_id                     # GitHub App ID
+   GITHUB_APP_PRIVATE_KEY_PATH=./path/to/private-key.pem  # Path to GitHub App private key
 
    # Client Configuration
-   CLIENT_PORT=3000
-   REACT_APP_API_URL=http://localhost:5001/api
-   REACT_APP_WEBSOCKET_URL=ws://localhost:5001
-
-   # Production URLs
-   PROD_API_URL=http://localhost/api
-   PROD_WEBSOCKET_URL=ws://localhost
+   CLIENT_URL=http://localhost              # Base URL for the client application
+   REACT_APP_API_URL=http://localhost/api   # API endpoint URL for the client
+   REACT_APP_WEBSOCKET_URL=ws://localhost   # WebSocket URL for real-time updates
    ```
 
 3. Generate a webhook secret:
    ```
    node scripts/generate-webhook-secret.js
    ```
+
+4. Set up your GitHub App:
+   - Create a GitHub App in your organization's settings
+   - Note down the App ID
+   - Generate and download the private key
+   - Place the private key file in your project directory
+   - Update the GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY_PATH in your .env file
 
 ### Backend Setup
 
@@ -174,11 +181,22 @@ The application can be deployed using Docker and Docker Compose. This will creat
 
 2. Create a `.env` file in the root directory:
    ```
-   MONGODB_URI=mongodb://mongodb:27017/runwatch
+   # Node environment
    NODE_ENV=production
-   PORT=5000
+
+   # Server Configuration
+   PORT=5001
+   MONGODB_URI=mongodb://mongodb:27017/runwatch
+
+   # GitHub Configuration
    GITHUB_WEBHOOK_SECRET=your_github_webhook_secret
+   GITHUB_APP_ID=your_github_app_id
+   GITHUB_APP_PRIVATE_KEY_PATH=./path/to/private-key.pem
+
+   # Client Configuration
    CLIENT_URL=http://localhost
+   REACT_APP_API_URL=http://localhost/api
+   REACT_APP_WEBSOCKET_URL=ws://localhost
    ```
 
 3. Use the deployment script to manage the application:
