@@ -22,19 +22,21 @@ const setupGithubWebhooks = (secret) => {
 
   // Override verify method to work with both raw form data and JSON
   webhooks.verify = async (options) => {
-    const { id, name, signature, rawBody } = options;
+    const { signature, rawBody } = options;
     
     if (!signature) {
       throw new Error('Signature is required');
     }
 
-    if (!rawBody) {
-      throw new Error('Raw body is required');
+    if (!rawBody || typeof rawBody !== 'string' && !Buffer.isBuffer(rawBody)) {
+      throw new Error('Raw body must be a string or Buffer');
     }
 
     const sig = Buffer.from(signature);
     const hmac = crypto.createHmac('sha256', secret);
-    const hash = Buffer.from(`sha256=${hmac.update(rawBody).digest('hex')}`, 'utf8');
+    const data = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
+    hmac.update(data);
+    const hash = Buffer.from(`sha256=${hmac.digest('hex')}`, 'utf8');
 
     if (sig.length !== hash.length || !crypto.timingSafeEqual(sig, hash)) {
       throw new Error('Signature does not match');

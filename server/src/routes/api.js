@@ -22,6 +22,9 @@ router.get('/workflow-runs', workflowController.getAllWorkflowRuns);
 // Get workflow runs for a specific repository
 router.get('/workflow-runs/repo/*', workflowController.getRepoWorkflowRuns);
 
+// Sync all workflow runs for a repository
+router.post('/workflow-runs/repo/*/sync', workflowController.syncRepositoryWorkflowRuns);
+
 // Get workflow statistics
 router.get('/stats', workflowController.getWorkflowStats);
 
@@ -39,6 +42,10 @@ router.post('/workflow-runs/:runId/jobs', workflowController.updateWorkflowJobs)
 
 // Database status endpoint
 router.get('/db/status', workflowController.getDatabaseStatus);
+
+// Database backup routes
+router.get('/database/backup', workflowController.createBackup);
+router.post('/database/restore', workflowController.restoreBackup);
 
 // Get available organizations
 router.get('/organizations', async (req, res) => {

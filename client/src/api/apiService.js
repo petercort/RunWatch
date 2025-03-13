@@ -30,14 +30,14 @@ const apiService = {
   },
 
   // Get workflow runs for a specific repository
-  getRepoWorkflowRuns: async (repoName, page = 1, pageSize = 30, workflowName = null) => {
+  getRepoWorkflowRuns: async (repoName, workflowName = null, page = 1, pageSize = 30) => {
     try {
       const params = { page, pageSize };
       if (workflowName) {
-        params.workflowName = encodeURIComponent(workflowName);
+        params.workflowName = workflowName;
       }
       const response = await axios.get(`${API_URL}/workflow-runs/repo/${repoName}`, { params });
-      return response.data.data || { data: [], pagination: { total: 0, page: 1, pageSize: 30, totalPages: 1 } };
+      return response.data.data || { data: [], pagination: { total: 0, page: 1, pageSize: 0, totalPages: 1 } };
     } catch (error) {
       console.error(`Error fetching workflow runs for repo ${repoName}:`, error);
       throw error;
@@ -62,6 +62,17 @@ const apiService = {
       return response.data.data;
     } catch (error) {
       console.error(`Error syncing workflow run ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Sync all workflow runs for a repository
+  syncWorkflowRuns: async (repoName) => {
+    try {
+      const response = await axios.post(`${API_URL}/workflow-runs/repo/${repoName}/sync`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Error syncing workflow runs for repo ${repoName}:`, error);
       throw error;
     }
   },
@@ -153,6 +164,18 @@ const apiService = {
       console.error('Error fetching active metrics:', error);
       throw error;
     }
+  },
+  
+  // Create database backup
+  async createDatabaseBackup() {
+    const response = await axios.get(`${API_URL}/database/backup`);
+    return response.data;
+  },
+
+  // Restore database backup
+  async restoreDatabaseBackup(backupData) {
+    const response = await axios.post(`${API_URL}/database/restore`, backupData);
+    return response.data;
   }
 };
 

@@ -23,7 +23,7 @@ import {
   FormHelperText,
   Grid
 } from '@mui/material';
-import { Sync as SyncIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import { Sync as SyncIcon, ExpandMore as ExpandMoreIcon, Save as SaveIcon, Restore as RestoreIcon } from '@mui/icons-material';
 import apiService from '../../api/apiService';
 import { socket } from '../../api/socketService';
 import { formatDistanceToNow } from 'date-fns';
@@ -45,6 +45,8 @@ const Settings = () => {
   const [activeSync, setActiveSync] = useState(null);
   const [selectedSync, setSelectedSync] = useState(null);
   const [dbStatus, setDbStatus] = useState(null);
+  const [restoreMessage, setRestoreMessage] = useState(null);
+  const [restoreMessageType, setRestoreMessageType] = useState('success');
 
   const fetchActiveSync = async () => {
     try {
@@ -194,6 +196,69 @@ const Settings = () => {
     setSelectedSync(sync);
   };
 
+  const handleCreateBackup = async () => {
+    try {
+      const response = await apiService.createDatabaseBackup();
+      const backupData = JSON.stringify(response.data);
+      const blob = new Blob([backupData], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `runwatch-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setRestoreMessage('Database backup created successfully');
+      setRestoreMessageType('success');
+    } catch (err) {
+      setRestoreMessage('Failed to create database backup: ' + err.message);
+      setRestoreMessageType('error');
+      console.error(err);
+    }
+  };
+
+  const handleRestoreBackup = async (event) => {
+    try {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      setRestoreMessage('Restoring database...');
+      setRestoreMessageType('info');
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const backupData = JSON.parse(e.target.result);
+          const response = await apiService.restoreDatabaseBackup(backupData);
+          
+          // Refresh database status after restore
+          await fetchDatabaseStatus();
+          
+          setRestoreMessage(
+            `Database restored successfully:\n` +
+            `• ${response.data.stats.collectionsProcessed} collections processed\n` +
+            `• ${response.data.stats.documentsRestored.toLocaleString()} documents restored\n` +
+            (response.data.stats.errors.length > 0 ? 
+              `• ${response.data.stats.errors.length} errors occurred during restore` : '')
+          );
+          setRestoreMessageType(response.data.stats.errors.length > 0 ? 'warning' : 'success');
+          setError(null);
+        } catch (err) {
+          setRestoreMessage('Failed to restore database: ' + err.message);
+          setRestoreMessageType('error');
+          console.error(err);
+        }
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      setRestoreMessage('Failed to read backup file');
+      setRestoreMessageType('error');
+      console.error(err);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -209,107 +274,160 @@ const Settings = () => {
           Database Health
         </Typography>
         {dbStatus ? (
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Status
-                  </Typography>
-                  <Chip 
-                    label={dbStatus.ok ? "Healthy" : "Unhealthy"}
-                    color={dbStatus.ok ? "success" : "error"}
-                    size="small"
-                  />
-                </CardContent>
-              </Card>
+          <>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Status
+                    </Typography>
+                    <Chip 
+                      label={dbStatus.ok ? "Healthy" : "Unhealthy"}
+                      color={dbStatus.ok ? "success" : "error"}
+                      size="small"
+                    />
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Total Workflows
+                    </Typography>
+                    <Typography variant="h6">
+                      {dbStatus.totalWorkflows?.toLocaleString() || 'N/A'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Storage Size
+                    </Typography>
+                    <Typography variant="h6">
+                      {`${(dbStatus.storageSize / (1024 * 1024)).toFixed(1)} MB`}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Data Size
+                    </Typography>
+                    <Typography variant="h6">
+                      {`${(dbStatus.dataSize / (1024 * 1024)).toFixed(1)} MB`}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Collections
+                    </Typography>
+                    <Typography variant="h6">
+                      {dbStatus.collections || 'N/A'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Indexes
+                    </Typography>
+                    <Typography variant="h6">
+                      {dbStatus.indexes || 'N/A'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Avg Object Size
+                    </Typography>
+                    <Typography variant="h6">
+                      {`${(dbStatus.avgObjSize / 1024).toFixed(1)} KB`}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Last Update
+                    </Typography>
+                    <Typography variant="body2">
+                      {dbStatus.lastUpdated?.run?.run?.updated_at ? 
+                        formatDistanceToNow(new Date(dbStatus.lastUpdated.run.run.updated_at), { addSuffix: true }) : 'N/A'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Total Workflows
-                  </Typography>
-                  <Typography variant="h6">
-                    {dbStatus.totalWorkflows?.toLocaleString() || 'N/A'}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Storage Size
-                  </Typography>
-                  <Typography variant="h6">
-                    {`${(dbStatus.storageSize / (1024 * 1024)).toFixed(1)} MB`}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Data Size
-                  </Typography>
-                  <Typography variant="h6">
-                    {`${(dbStatus.dataSize / (1024 * 1024)).toFixed(1)} MB`}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Collections
-                  </Typography>
-                  <Typography variant="h6">
-                    {dbStatus.collections || 'N/A'}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Indexes
-                  </Typography>
-                  <Typography variant="h6">
-                    {dbStatus.indexes || 'N/A'}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Avg Object Size
-                  </Typography>
-                  <Typography variant="h6">
-                    {`${(dbStatus.avgObjSize / 1024).toFixed(1)} KB`}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Last Update
-                  </Typography>
-                  <Typography variant="body2">
-                    {dbStatus.lastUpdated?.run?.run?.updated_at ? 
-                      formatDistanceToNow(new Date(dbStatus.lastUpdated.run.run.updated_at), { addSuffix: true }) : 'N/A'}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+
+            {restoreMessage && (
+              <Alert 
+                severity={restoreMessageType} 
+                sx={{ 
+                  mt: 2,
+                  whiteSpace: 'pre-line'  // Allow newlines in the message
+                }}
+                onClose={() => setRestoreMessage(null)}
+              >
+                {restoreMessage}
+              </Alert>
+            )}
+
+            <Box sx={{ mt: 4, display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Button
+                variant="contained"
+                onClick={handleCreateBackup}
+                startIcon={<SaveIcon />}
+                sx={{
+                  bgcolor: 'rgba(88, 166, 255, 0.1)',
+                  color: '#58A6FF',
+                  '&:hover': {
+                    bgcolor: 'rgba(88, 166, 255, 0.2)',
+                  }
+                }}
+              >
+                Create Backup
+              </Button>
+
+              <Button
+                component="label"
+                variant="contained"
+                startIcon={<RestoreIcon />}
+                sx={{
+                  bgcolor: 'rgba(88, 166, 255, 0.1)',
+                  color: '#58A6FF',
+                  '&:hover': {
+                    bgcolor: 'rgba(88, 166, 255, 0.2)',
+                  }
+                }}
+              >
+                Restore Backup
+                <input
+                  type="file"
+                  hidden
+                  accept=".json"
+                  onChange={handleRestoreBackup}
+                />
+              </Button>
+            </Box>
+          </>
         ) : (
           <Typography color="text.secondary">
             Loading database status...

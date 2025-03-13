@@ -68,38 +68,64 @@ export const getAllWorkflowRuns = async (req, res) => {
 export const getRepoWorkflowRuns = async (req, res) => {
   try {
     const repoPath = req.params[0];
+    const { workflowName } = req.query; // Get workflowName from query params
+
     if (!repoPath) {
       return errorResponse(res, 'Repository name is required', 400);
     }
 
-    const page = parseInt(req.query.page) || 1;
-    const pageSize = parseInt(req.query.pageSize) || 30;
-    const workflowName = req.query.workflowName ? decodeURIComponent(req.query.workflowName) : null;
-    const skip = (page - 1) * pageSize;
+    // First get the repository document to get all workflows
+    const repoDoc = await WorkflowRun.findOne({ 'repository.fullName': repoPath });
+    
+    if (!repoDoc) {
+      return successResponse(res, {
+        data: [],
+        pagination: { total: 0, page: 1, pageSize: 0, totalPages: 1 }
+      });
+    }
 
-    // Build query with workflow name filter if provided
-    const query = {
-      'repository.fullName': repoPath
-    };
+    // Get all runs with workflow name filter if provided
+    const query = { 'repository.fullName': repoPath };
     if (workflowName) {
       query['workflow.name'] = workflowName;
     }
 
-    // Get total count for pagination with the workflow filter
-    const totalCount = await WorkflowRun.countDocuments(query);
+    const runs = await WorkflowRun.find(query).sort({ 'run.created_at': -1 });
 
-    const workflowRuns = await WorkflowRun.find(query)
-      .sort({ 'run.created_at': -1 })
-      .skip(skip)
-      .limit(pageSize);
+    // Attach the full workflows list to each run
+    const runsWithWorkflows = runs.map(run => ({
+      ...run.toObject(),
+      repository: {
+        ...run.repository,
+        workflows: repoDoc.repository.workflows || []
+      }
+    }));
+
+    // If we have no runs but have workflows and a specific workflow was requested
+    if (runs.length === 0 && workflowName && repoDoc.repository.workflows?.length > 0) {
+      const requestedWorkflow = repoDoc.repository.workflows.find(w => w.name === workflowName);
+      if (requestedWorkflow) {
+        runsWithWorkflows.push({
+          repository: {
+            ...repoDoc.repository,
+            workflows: repoDoc.repository.workflows
+          },
+          workflow: {
+            id: requestedWorkflow.id,
+            name: requestedWorkflow.name,
+            path: requestedWorkflow.path
+          }
+        });
+      }
+    }
 
     return successResponse(res, {
-      data: workflowRuns,
+      data: runsWithWorkflows,
       pagination: {
-        total: totalCount,
-        page,
-        pageSize,
-        totalPages: Math.ceil(totalCount / pageSize)
+        total: runs.length,
+        page: 1,
+        pageSize: runs.length,
+        totalPages: 1
       }
     });
   } catch (error) {
@@ -180,6 +206,28 @@ export const syncWorkflowRun = async (req, res) => {
   }
 };
 
+export const syncRepositoryWorkflowRuns = async (req, res) => {
+  try {
+    const repoPath = req.params[0];
+    if (!repoPath) {
+      return errorResponse(res, 'Repository name is required', 400);
+    }
+
+    const workflowRuns = await workflowService.syncRepositoryWorkflowRuns(repoPath);
+
+    // After sync is complete, emit updates for each workflow run
+    if (req.io) {
+      workflowRuns.forEach(run => {
+        req.io.emit('workflowUpdate', run);
+      });
+    }
+
+    return successResponse(res, workflowRuns);
+  } catch (error) {
+    return errorResponse(res, 'Error syncing repository workflow runs', 500, error);
+  }
+};
+
 export const getActiveMetrics = async (req, res) => {
   try {
     console.log('Getting active workflow metrics...');
@@ -189,5 +237,81 @@ export const getActiveMetrics = async (req, res) => {
   } catch (error) {
     console.error('Error retrieving active workflow metrics:', error);
     return errorResponse(res, 'Error retrieving active workflow metrics', 500, error);
+  }
+};
+
+export const createBackup = async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const collections = await db.collections();
+    const backup = {};
+
+    for (const collection of collections) {
+      const documents = await collection.find({}).toArray();
+      backup[collection.collectionName] = documents;
+    }
+
+    return successResponse(res, backup);
+  } catch (error) {
+    return errorResponse(res, 'Error creating database backup', 500, error);
+  }
+};
+
+export const restoreBackup = async (req, res) => {
+  try {
+    const backupData = req.body.data || req.body;
+    const db = mongoose.connection.db;
+    
+    // Validate backup data structure
+    if (!backupData || typeof backupData !== 'object') {
+      return errorResponse(res, 'Invalid backup data', 400);
+    }
+
+    // Store restore statistics
+    const stats = {
+      collectionsProcessed: 0,
+      documentsRestored: 0,
+      errors: []
+    };
+
+    // Drop existing collections and restore from backup
+    for (const [collectionName, documents] of Object.entries(backupData)) {
+      if (Array.isArray(documents)) {
+        try {
+          // Drop existing collection
+          try {
+            await db.collection(collectionName).drop();
+          } catch (err) {
+            // Collection might not exist, continue
+          }
+
+          // Restore documents if there are any
+          if (documents.length > 0) {
+            await db.collection(collectionName).insertMany(documents);
+            stats.collectionsProcessed++;
+            stats.documentsRestored += documents.length;
+          }
+        } catch (error) {
+          stats.errors.push({
+            collection: collectionName,
+            error: error.message
+          });
+        }
+      }
+    }
+
+    // Get updated database stats
+    const dbStats = await db.stats();
+    
+    return successResponse(res, { 
+      message: 'Database restored successfully',
+      stats: {
+        ...stats,
+        databaseSize: dbStats.dataSize,
+        totalCollections: dbStats.collections
+      }
+    });
+  } catch (error) {
+    return errorResponse(res, 'Error restoring database backup', 500, error);
   }
 };

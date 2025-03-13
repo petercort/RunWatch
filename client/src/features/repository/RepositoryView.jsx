@@ -34,18 +34,14 @@ const RepositoryView = () => {
   const navigate = useNavigate();
   const [repository, setRepository] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    pageSize: 30,
-    totalPages: 1
-  });
 
   const calculateRepoStats = (runs) => {
     if (!runs.length) return null;
 
+    // Initialize stats for all workflows
     const workflowStats = {};
     let totalRuns = 0;
     let successfulRuns = 0;
@@ -53,15 +49,34 @@ const RepositoryView = () => {
     let totalDuration = 0;
     let durationCount = 0;
 
+    // First initialize stats for all workflows in repository
+    const allWorkflows = runs[0]?.repository?.workflows || [];
+    allWorkflows.forEach(workflow => {
+      workflowStats[workflow.name] = {
+        total: 0,
+        successful: 0,
+        failed: 0,
+        durations: [],
+        lastRun: null,
+        path: workflow.path,
+        state: workflow.state,
+        lastSyncedAt: workflow.lastSyncedAt
+      };
+    });
+
+    // Then update stats for workflows that have runs
     runs.forEach(run => {
       const workflowName = run.workflow.name;
       if (!workflowStats[workflowName]) {
+        // This shouldn't happen normally but handle it just in case
         workflowStats[workflowName] = {
           total: 0,
           successful: 0,
           failed: 0,
           durations: [],
           lastRun: null,
+          path: run.workflow.path,
+          state: 'active'
         };
       }
 
@@ -87,8 +102,9 @@ const RepositoryView = () => {
         durationCount++;
       }
 
-      if (!stats.lastRun || new Date(run.run.updated_at) > new Date(stats.lastRun)) {
-        stats.lastRun = run.run.updated_at;
+      // Update lastRun if this run is more recent
+      if (!stats.lastRun || new Date(run.run.created_at) > new Date(stats.lastRun)) {
+        stats.lastRun = run.run.created_at;
       }
     });
 
@@ -153,37 +169,31 @@ const RepositoryView = () => {
     };
   };
 
-  useEffect(() => {
-    const fetchRepositoryData = async () => {
-      try {
-        setLoading(true);
-        const response = await apiService.getRepoWorkflowRuns(
-          decodeURIComponent(repoName),
-          pagination.page,
-          pagination.pageSize
-        );
-        const repoWorkflows = response.data;
-        
-        if (repoWorkflows.length > 0) {
-          const repoInfo = repoWorkflows[0].repository;
-          setRepository(repoInfo);
-          setStats(calculateRepoStats(repoWorkflows));
-          setPagination(prevPagination => ({
-            ...prevPagination,
-            ...response.pagination
-          }));
-          setError(null);
-        } else {
-          setError('Repository not found');
-        }
-      } catch (err) {
-        setError('Failed to fetch repository data. Please try again later.');
-        console.error(err);
-      } finally {
-        setLoading(false);
+  const fetchRepositoryData = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.getRepoWorkflowRuns(
+        decodeURIComponent(repoName)
+      );
+      const repoWorkflows = response.data;
+      
+      if (repoWorkflows.length > 0) {
+        const repoInfo = repoWorkflows[0].repository;
+        setRepository(repoInfo);
+        setStats(calculateRepoStats(repoWorkflows));
+        setError(null);
+      } else {
+        setError('Repository not found');
       }
-    };
+    } catch (err) {
+      setError('Failed to fetch repository data. Please try again later.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchRepositoryData();
 
     // Set up socket listeners for real-time updates
@@ -199,7 +209,29 @@ const RepositoryView = () => {
     return () => {
       cleanupListeners();
     };
-  }, [repoName, pagination.page, pagination.pageSize]);
+  }, [repoName]);
+
+  const handleSyncAll = async () => {
+    try {
+      setSyncing(true);
+      await apiService.syncWorkflowRuns(decodeURIComponent(repoName));
+      // Refresh the data to get the latest stats
+      await fetchRepositoryData();
+      setError(null);
+    } catch (err) {
+      setError('Failed to sync workflow runs. Please try again later.');
+      console.error(err);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const navigateToWorkflowHistory = (workflowName) => {
+    // First encode both parameters for the URL
+    const encodedRepoName = encodeURIComponent(repoName);
+    const encodedWorkflowName = encodeURIComponent(workflowName);
+    navigate(`/workflow-history/${encodedRepoName}/${encodedWorkflowName}`);
+  };
 
   if (loading) {
     return (
@@ -230,7 +262,7 @@ const RepositoryView = () => {
       <Box sx={{ 
         display: 'flex', 
         alignItems: 'center', 
-        mb: 4,
+        mb: 3,
         background: 'linear-gradient(90deg, rgba(88, 166, 255, 0.1) 0%, rgba(88, 166, 255, 0.05) 100%)',
         p: 3,
         borderRadius: '12px',
@@ -256,6 +288,23 @@ const RepositoryView = () => {
         </Box>
         <Button
           variant="outlined"
+          startIcon={<ScheduleIcon />}
+          onClick={handleSyncAll}
+          disabled={syncing}
+          sx={{ 
+            mr: 1,
+            borderColor: 'rgba(88, 166, 255, 0.2)',
+            color: '#58A6FF',
+            '&:hover': {
+              borderColor: 'rgba(88, 166, 255, 0.5)',
+              bgcolor: 'rgba(88, 166, 255, 0.1)'
+            }
+          }}
+        >
+          {syncing ? 'Syncing...' : 'Sync All'}
+        </Button>
+        <Button
+          variant="outlined"
           startIcon={<GitHubIcon />}
           onClick={() => window.open(repository.url, '_blank', 'noopener,noreferrer')}
           sx={{ 
@@ -271,58 +320,58 @@ const RepositoryView = () => {
         </Button>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={2}>
         {/* Overview Stats */}
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={3}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <AssessmentIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Total Runs</Typography>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <AssessmentIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Total Runs</Typography>
               </Box>
-              <Typography variant="h4" sx={{ color: '#E6EDF3' }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
                 {stats.totalRuns}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={3}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TrendingUpIcon sx={{ color: '#23C562', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Success Rate</Typography>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <TrendingUpIcon sx={{ color: '#23C562', mr: 1, fontSize: '1rem' }} />
+                <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Success Rate</Typography>
               </Box>
-              <Typography variant="h4" sx={{ color: '#E6EDF3' }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
                 {stats.successRate.toFixed(1)}%
               </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={3}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <BugIcon sx={{ color: '#F85149', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Failed Runs</Typography>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <BugIcon sx={{ color: '#F85149', mr: 1, fontSize: '1rem' }} />
+                <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Failed Runs</Typography>
               </Box>
-              <Typography variant="h4" sx={{ color: '#E6EDF3' }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
                 {stats.failedRuns}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={6} sm={3}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TimeIcon sx={{ color: '#58A6FF', mr: 1 }} />
-                <Typography sx={{ color: '#8B949E' }}>Avg. Duration</Typography>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <TimeIcon sx={{ color: '#58A6FF', mr: 1, fontSize: '1rem' }} />
+                <Typography sx={{ color: '#8B949E', fontSize: '0.875rem' }}>Avg. Duration</Typography>
               </Box>
-              <Typography variant="h6" sx={{ color: '#E6EDF3' }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1.1rem' }}>
                 {formatDuration(stats.avgDuration)}
               </Typography>
             </CardContent>
@@ -330,17 +379,20 @@ const RepositoryView = () => {
         </Grid>
 
         {/* Activity Trends Chart */}
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Paper elevation={0} sx={{ 
-            p: 3,
+            p: 2,
+            height: '100%',
             bgcolor: '#161B22',
             borderRadius: '12px',
-            border: '1px solid rgba(240, 246, 252, 0.1)'
+            border: '1px solid rgba(240, 246, 252, 0.1)',
+            display: 'flex',
+            flexDirection: 'column'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2, fontSize: '1rem' }}>
               30-Day Activity Trends
             </Typography>
-            <Box sx={{ height: 300 }}>
+            <Box sx={{ flex: 1, minHeight: 250 }}>
               <Line
                 data={stats.activityTrends}
                 options={{
@@ -352,8 +404,7 @@ const RepositoryView = () => {
                   },
                   plugins: {
                     legend: {
-                      position: 'top',
-                      labels: { color: '#8B949E' }
+                      display: false
                     }
                   },
                   scales: {
@@ -377,17 +428,20 @@ const RepositoryView = () => {
         </Grid>
 
         {/* Workflow Comparison */}
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Paper elevation={0} sx={{ 
-            p: 3,
+            p: 2,
+            height: '100%',
             bgcolor: '#161B22',
             borderRadius: '12px',
-            border: '1px solid rgba(240, 246, 252, 0.1)'
+            border: '1px solid rgba(240, 246, 252, 0.1)',
+            display: 'flex',
+            flexDirection: 'column'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 2, fontSize: '1rem' }}>
               Workflow Comparison
             </Typography>
-            <Box sx={{ height: 300 }}>
+            <Box sx={{ flex: 1, minHeight: 250 }}>
               <Bar
                 data={stats.workflowComparison}
                 options={{
@@ -396,7 +450,7 @@ const RepositoryView = () => {
                   plugins: {
                     legend: {
                       position: 'top',
-                      labels: { color: '#8B949E' }
+                      labels: { color: '#8B949E', boxHeight: 8, padding: 8 }
                     }
                   },
                   scales: {
@@ -419,14 +473,16 @@ const RepositoryView = () => {
         {/* Workflow Details */}
         <Grid item xs={12}>
           <Paper elevation={0} sx={{ 
-            p: 3,
+            p: 2,
             bgcolor: '#161B22',
             borderRadius: '12px',
             border: '1px solid rgba(240, 246, 252, 0.1)'
           }}>
-            <Typography variant="h6" sx={{ color: '#E6EDF3', mb: 3 }}>
-              Workflows
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ color: '#E6EDF3', fontSize: '1rem' }}>
+                Workflows ({Object.keys(stats.workflowStats).length})
+              </Typography>
+            </Box>
             <Stack spacing={2}>
               {Object.entries(stats.workflowStats).map(([name, workflowStat]) => (
                 <Paper
@@ -442,7 +498,7 @@ const RepositoryView = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
                       <Typography 
-                        onClick={() => navigate(`/workflow-history/${encodeURIComponent(repoName)}/${encodeURIComponent(name)}`)}
+                        onClick={() => navigateToWorkflowHistory(name)}
                         sx={{ 
                           color: '#E6EDF3',
                           fontWeight: 500,

@@ -737,12 +737,20 @@ const Dashboard = () => {
                       icon={<PlayArrowIcon sx={{ fontSize: '1.25rem !important' }} />}
                       label={`${buildMetrics[orgName]?.inProgress || 0} In Progress`}
                       size="small"
+                      onClick={() => {
+                        setStatusFilter('in_progress');
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }}
                       sx={{ 
                         bgcolor: 'rgba(35, 197, 98, 0.1)', 
                         color: '#23C562',
                         animation: buildMetrics[orgName]?.inProgress ? `${pulse} 2s ease-in-out infinite` : 'none',
                         fontWeight: 500,
                         height: '28px',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: 'rgba(35, 197, 98, 0.2)'
+                        },
                         '& .MuiChip-label': {
                           fontSize: '0.875rem',
                           px: 1.5
@@ -753,12 +761,20 @@ const Dashboard = () => {
                       icon={<PendingIcon sx={{ fontSize: '1.25rem !important' }} />}
                       label={`${buildMetrics[orgName]?.queued || 0} Queued`}
                       size="small"
+                      onClick={() => {
+                        setStatusFilter('queued');
+                        setPagination(prev => ({ ...prev, page: 1 }));
+                      }}
                       sx={{ 
                         bgcolor: 'rgba(245, 166, 35, 0.1)', 
                         color: '#F5A623',
                         animation: buildMetrics[orgName]?.queued ? `${pulse} 2s ease-in-out infinite` : 'none',
                         fontWeight: 500,
                         height: '28px',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: 'rgba(245, 166, 35, 0.2)'
+                        },
                         '& .MuiChip-label': {
                           fontSize: '0.875rem',
                           px: 1.5
@@ -819,7 +835,7 @@ const Dashboard = () => {
                                 sm: 'repeat(2, 1fr)',
                                 md: 'repeat(3, 1fr)',
                                 lg: 'repeat(4, 1fr)',
-                                xl: 'repeat(10, 1fr)'
+                                xl: 'repeat(6, 1fr)'
                               },
                               gap: 2,
                             }}

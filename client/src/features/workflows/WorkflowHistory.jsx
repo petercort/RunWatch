@@ -15,7 +15,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
   CircularProgress,
   Button,
   Stack,
@@ -41,24 +40,19 @@ const WorkflowHistory = () => {
   const [workflowRuns, setWorkflowRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 0,
-    pageSize: ITEMS_PER_PAGE,
-    totalPages: 1
-  });
   const [stats, setStats] = useState(null);
   const [syncingRun, setSyncingRun] = useState(null);
 
   const calculateStats = (runs) => {
     if (!runs.length) return null;
 
-    const completedRuns = runs.filter(run => run.run.status === 'completed');
-    const successfulRuns = runs.filter(run => run.run.conclusion === 'success');
-    const failedRuns = runs.filter(run => run.run.conclusion === 'failure');
+    const completedRuns = runs.filter(run => run.run?.status === 'completed');
+    const successfulRuns = runs.filter(run => run.run?.conclusion === 'success');
+    const failedRuns = runs.filter(run => run.run?.conclusion === 'failure');
     
     const durations = completedRuns
       .map(run => {
+        if (!run.run) return null;
         const start = new Date(run.run.created_at);
         const end = new Date(run.run.updated_at);
         const duration = end - start;
@@ -75,13 +69,13 @@ const WorkflowHistory = () => {
       : 0;
 
     return {
-      totalRuns: runs.length,
+      totalRuns: runs.filter(run => run.run).length,
       successfulRuns: successfulRuns.length,
       failedRuns: failedRuns.length,
       averageDuration: avgDuration,
       successRate,
-      lastRun: runs[0]?.run.updated_at,
-      trendsData: generateTrendsData(runs),
+      lastRun: runs[0]?.run?.updated_at,
+      trendsData: generateTrendsData(runs.filter(run => run.run)),
     };
   };
 
@@ -149,60 +143,51 @@ const WorkflowHistory = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchWorkflowHistory = async () => {
-      try {
-        setLoading(true);
-        const response = await apiService.getRepoWorkflowRuns(
-          decodeURIComponent(repoName),
-          pagination.page + 1,
-          pagination.pageSize,
-          decodeURIComponent(workflowName)
-        );
-        
-        setWorkflowRuns(response.data);
-        setStats(calculateStats(response.data));
-        setPagination(prev => ({
-          ...prev,
-          total: response.pagination.total,
-          totalPages: response.pagination.totalPages,
-          page: response.pagination.page - 1 // Convert to 0-based for MUI pagination
-        }));
-      } catch (err) {
-        setError('Failed to fetch workflow history. Please try again later.');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchWorkflowHistory = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.getRepoWorkflowRuns(
+        decodeURIComponent(repoName),
+        decodeURIComponent(workflowName)
+      );
+      
+      setWorkflowRuns(response.data);
+      setStats(calculateStats(response.data));
+      setError(null);
+    } catch (err) {
+      setError('Failed to fetch workflow history. Please try again later.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchWorkflowHistory();
 
     // Set up socket listeners for real-time updates
     const cleanupListeners = setupSocketListeners({
       onWorkflowUpdate: (updatedWorkflow) => {
-        // Only update if the workflow belongs to this history view
+        // Compare with the decoded workflowName since that's what we get from useParams
         if (updatedWorkflow.workflow.name === decodeURIComponent(workflowName) &&
             updatedWorkflow.repository.fullName === decodeURIComponent(repoName)) {
           setWorkflowRuns(prev => {
             const updated = prev.map(workflow =>
-              workflow.run.id === updatedWorkflow.run.id ? updatedWorkflow : workflow
+              workflow.run?.id === updatedWorkflow.run.id ? updatedWorkflow : workflow
             );
-            // Recalculate stats with updated data
             setStats(calculateStats(updated));
             return updated;
           });
         }
       },
       onJobsUpdate: (workflowWithJobs) => {
-        // Update if the workflow with jobs belongs to this history view
+        // Compare with the decoded workflowName since that's what we get from useParams
         if (workflowWithJobs.workflow.name === decodeURIComponent(workflowName) &&
             workflowWithJobs.repository.fullName === decodeURIComponent(repoName)) {
           setWorkflowRuns(prev => {
             const updated = prev.map(workflow =>
               workflow.run.id === workflowWithJobs.run.id ? workflowWithJobs : workflow
             );
-            // Recalculate stats with updated data
             setStats(calculateStats(updated));
             return updated;
           });
@@ -210,10 +195,8 @@ const WorkflowHistory = () => {
       }
     });
 
-    return () => {
-      cleanupListeners(); // Cleanup socket listeners when component unmounts
-    };
-  }, [repoName, workflowName, pagination.page, pagination.pageSize]);
+    return () => cleanupListeners();
+  }, [repoName, workflowName]);
 
   if (loading) {
     return (
@@ -499,23 +482,6 @@ const WorkflowHistory = () => {
                 </TableBody>
               </Table>
             </TableContainer>
-            <TablePagination
-              component="div"
-              count={pagination.total}
-              page={pagination.page}
-              onPageChange={(_, newPage) => setPagination(prev => ({ ...prev, page: newPage }))}
-              rowsPerPage={pagination.pageSize}
-              rowsPerPageOptions={[pagination.pageSize]}
-              sx={{
-                color: '#8B949E',
-                '.MuiTablePagination-select': {
-                  color: '#E6EDF3'
-                },
-                '.MuiTablePagination-selectIcon': {
-                  color: '#8B949E'
-                }
-              }}
-            />
           </Paper>
         </Grid>
       </Grid>
