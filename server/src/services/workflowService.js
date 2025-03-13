@@ -39,7 +39,7 @@ export const processWorkflowRun = async (payload) => {
         url: transformGitHubUrl(run.html_url),
         head_branch: run.head_branch,
         event: run.event,
-        labels: run.labels || [],
+        labels: run.labels || [], // Ensure labels are always set
         runner_id: run.runner_id,
         runner_name: run.runner_name,
         runner_group_id: run.runner_group_id,
@@ -47,11 +47,17 @@ export const processWorkflowRun = async (payload) => {
       }
     };
 
-    console.log('Saving workflow run:', {
+    console.log('Processing workflow run with labels:', {
       id: run.id,
-      status: run.status,
-      conclusion: run.conclusion
+      labels: workflowRunData.run.labels,
+      status: run.status
     });
+
+    // Find existing run to preserve any existing labels if none provided
+    const existingRun = await WorkflowRun.findOne({ 'run.id': run.id });
+    if (existingRun && !workflowRunData.run.labels.length && existingRun.run.labels?.length) {
+      workflowRunData.run.labels = existingRun.run.labels;
+    }
 
     // Use findOneAndUpdate with upsert to either update existing or create new
     const workflowRun = await WorkflowRun.findOneAndUpdate(
@@ -212,6 +218,10 @@ export const processWorkflowJobEvent = async (payload) => {
       };
     };
 
+    // Find and update the workflow run, if it exists
+    const existingRun = await WorkflowRun.findOne({ 'run.id': workflow_job.run_id });
+    const jobLabels = workflow_job.labels || [];
+
     // Prepare the update data
     const workflowRunData = {
       repository: {
@@ -235,11 +245,7 @@ export const processWorkflowJobEvent = async (payload) => {
         status: workflow_job.status === 'in_progress' ? 'in_progress' : workflow_job.status,
         conclusion: workflow_job.conclusion,
         url: transformGitHubUrl(workflow_job.run_url),
-        labels: workflow_job.labels || [],
-        runner_id: workflow_job.runner_id,
-        runner_name: workflow_job.runner_name,
-        runner_group_id: workflow_job.runner_group_id,
-        runner_group_name: workflow_job.runner_group_name
+        labels: jobLabels // Set job labels
       }
     };
 
@@ -255,6 +261,7 @@ export const processWorkflowJobEvent = async (payload) => {
       runner_group_id: workflow_job.runner_group_id,
       runner_group_name: workflow_job.runner_group_name,
       ...processGitHubRunnerInfo(workflow_job),
+      labels: jobLabels,
       steps: workflow_job.steps?.map(step => ({
         name: step.name,
         status: step.status,
@@ -265,24 +272,25 @@ export const processWorkflowJobEvent = async (payload) => {
       })) || []
     };
 
-    // Find and update the workflow run, if it exists
-    const existingRun = await WorkflowRun.findOne({ 'run.id': workflow_job.run_id });
-
     if (existingRun) {
-      // If the run exists, update the job
+      // If the run exists, update the job and preserve existing labels
       const jobIndex = existingRun.jobs?.findIndex(job => job.id === workflow_job.id) ?? -1;
+      const combinedLabels = Array.from(new Set([...existingRun.run.labels || [], ...jobLabels]));
+      
       let jobsUpdate;
-
       if (jobIndex === -1) {
         // Add new job
-        jobsUpdate = { $push: { jobs: updatedJob } };
+        jobsUpdate = { 
+          $push: { jobs: updatedJob },
+          $set: { 'run.labels': combinedLabels }
+        };
       } else {
         // Update existing job
         jobsUpdate = { 
           $set: { 
             [`jobs.${jobIndex}`]: updatedJob,
             'run.status': workflow_job.status === 'in_progress' ? 'in_progress' : existingRun.run.status,
-            'run.labels': workflow_job.labels || existingRun.run.labels
+            'run.labels': combinedLabels
           } 
         };
       }

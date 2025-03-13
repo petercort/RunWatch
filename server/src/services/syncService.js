@@ -366,13 +366,65 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
                         results.workflows++;
 
                         // Process each run
+                        const processWorkflowRunWithLabels = async (run, jobs, repo, orgName) => {
+                            // Get all labels from jobs
+                            const allLabels = new Set();
+                            jobs.forEach(job => {
+                                if (job.labels) {
+                                    job.labels.forEach(label => allLabels.add(label));
+                                }
+                            });
+
+                            // Create workflow run payload with combined labels
+                            const workflowRunPayload = {
+                                workflow_run: {
+                                    ...run,
+                                    labels: Array.from(allLabels) // Add combined labels to the run
+                                },
+                                repository: repo,
+                                organization: { login: orgName }
+                            };
+
+                            const workflowRun = await workflowService.processWorkflowRun(workflowRunPayload);
+
+                            // Process each job
+                            if (jobs && jobs.length > 0) {
+                                for (const job of jobs) {
+                                    console.log(`Processing job ${job.id} for run ${run.run_number}:`, {
+                                        labels: job.labels,
+                                        runLabels: Array.from(allLabels),
+                                        jobName: job.name,
+                                        runNumber: run.run_number
+                                    });
+
+                                    const jobPayload = {
+                                        action: 'completed',
+                                        workflow_job: {
+                                            ...job,
+                                            run_number: run.run_number,
+                                            labels: job.labels || []
+                                        },
+                                        repository: repo,
+                                        organization: { login: orgName }
+                                    };
+                                    await workflowService.processWorkflowJobEvent(jobPayload);
+                                }
+
+                                if (global.io) {
+                                    global.io.emit('workflowUpdate', workflowRun);
+                                }
+                            }
+
+                            return workflowRun;
+                        };
+
                         for (const run of runs) {
                             try {
                                 await checkRateLimit();
 
                                 // Fetch jobs with pagination
                                 const jobs = [];
-                                page = 1;
+                                let page = 1;
                                 
                                 while (true) {
                                     const { data: { jobs: jobsPage } } = await octokit.rest.actions.listJobsForWorkflowRun({
@@ -388,67 +440,12 @@ export const syncGitHubData = async (installationId, socket, options = { maxWork
                                     page++;
                                 }
 
-                                // Process workflow run with all its jobs
-                                // Determine the actual status based on jobs
-                                let actualStatus = run.status;
-                                let actualConclusion = run.conclusion;
-                                
-                                if (jobs && jobs.length > 0) {
-                                    const allCompleted = jobs.every(job => job.status === 'completed');
-                                    const anyInProgress = jobs.some(job => job.status === 'in_progress');
-                                    const anyFailed = jobs.some(job => job.conclusion === 'failure');
-                                    
-                                    if (allCompleted) {
-                                        actualStatus = 'completed';
-                                        actualConclusion = anyFailed ? 'failure' : 'success';
-                                    } else if (anyInProgress) {
-                                        actualStatus = 'in_progress';
-                                    }
-                                }
-
-                                // Update the run status before processing
-                                run.status = actualStatus;
-                                run.conclusion = actualConclusion;
-
-                                const workflowRunPayload = {
-                                    action: 'completed',
-                                    workflow_run: run,
-                                    repository: repo,
-                                    organization: { login: orgName }
-                                };
-
-                                const workflowRun = await workflowService.processWorkflowRun(workflowRunPayload);
-
-                                if (jobs && jobs.length > 0) {
-                                    for (const job of jobs) {
-                                        console.log(`Processing job ${job.id} for run ${run.run_number}:`, {
-                                            labels: job.labels,
-                                            runLabels: run.labels,
-                                            jobName: job.name,
-                                            runNumber: run.run_number
-                                        });
-
-                                        // Attach run_number and labels from both workflow run and job
-                                        const jobPayload = {
-                                            action: 'completed',
-                                            workflow_job: {
-                                                ...job,
-                                                run_number: run.run_number,
-                                                ...(job.labels && { labels: job.labels })
-                                            },
-                                            repository: repo,
-                                            organization: { login: orgName }
-                                        };
-                                        await workflowService.processWorkflowJobEvent(jobPayload);
-                                    }
-
-                                    // Emit update after processing all jobs
-                                    if (global.io) {
-                                        global.io.emit('workflowUpdate', workflowRun);
-                                    }
-                                }
-
+                                // Process run with all its jobs
+                                const workflowRun = await processWorkflowRunWithLabels(run, jobs, repo, orgName);
                                 results.runs++;
+
+                                // Update progress
+                                const totalProgress = Math.floor(15 + (repoIndex / repos.length) * 85);
                                 await updateProgress(
                                     totalProgress,
                                     repo.name,
