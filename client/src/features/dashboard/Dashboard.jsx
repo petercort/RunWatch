@@ -3,21 +3,14 @@ import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-d
 import {
   Box,
   Typography,
-  Grid,
-  Card,
-  CardContent,
-  CardActions,
+  Grid2,
   Button,
   Chip,
   CircularProgress,
-  Divider,
   IconButton,
   Tooltip,
   Paper,
-  Collapse,
   Stack,
-  Link,
-  SvgIcon,
   TextField,
   InputAdornment,
   Select,
@@ -29,11 +22,6 @@ import {
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
-  ExpandMore as ExpandMoreIcon,
-  History as HistoryIcon,
-  Schedule as ScheduleIcon,
-  GitHub as GitHubIcon,
-  RocketLaunch as RocketLaunchIcon,
   Book as BookIcon,
   Search as SearchIcon,
   Close as CloseIcon,
@@ -42,11 +30,9 @@ import {
 } from '@mui/icons-material';
 import apiService from '../../api/apiService';
 import { setupSocketListeners, socket, defaultAlertConfig } from '../../api/socketService';
-import StatusChip from '../../common/components/StatusChip';
 import { formatDuration, formatDate } from '../../common/utils/statusHelpers';
 import { keyframes } from '@emotion/react';
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { ToastContainer } from 'react-toastify';
 
 const rotate = keyframes`
   from {
@@ -244,7 +230,6 @@ const Dashboard = () => {
   const [workflowRuns, setWorkflowRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [expandedWorkflows, setExpandedWorkflows] = useState(new Set());
   const [searchQuery, setSearchQuery] = useState(() => {
     const saved = localStorage.getItem('dashboardSearchQuery');
     return saved || '';
@@ -265,21 +250,6 @@ const Dashboard = () => {
   
   // Track long-queued workflows
   const [longQueuedWorkflows, setLongQueuedWorkflows] = useState({});
-  
-  // Define default dashboard settings
-  const defaultDashboardSettings = {
-    refreshEnabled: true,
-    refreshInterval: 30 // seconds
-  };
-  
-  // Load dashboard settings from localStorage
-  const [dashboardSettings, setDashboardSettings] = useState(() => {
-    const savedSettings = localStorage.getItem('dashboardSettings');
-    return savedSettings ? JSON.parse(savedSettings) : defaultDashboardSettings;
-  });
-  
-  // Set up auto-refresh timer reference
-  const refreshTimerRef = useRef(null);
 
   const pageSizeOptions = [30, 50, 100];
   const navigate = useNavigate();
@@ -464,18 +434,6 @@ const Dashboard = () => {
     totalRepos: pagination.total
   }), [groupedWorkflows, pagination]);
 
-  const toggleWorkflowHistory = (workflowKey) => {
-    setExpandedWorkflows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(workflowKey)) {
-        newSet.delete(workflowKey);
-      } else {
-        newSet.add(workflowKey);
-      }
-      return newSet;
-    });
-  };
-
   const handleClearSearch = () => {
     setSearchQuery('');
     localStorage.removeItem('dashboardSearchQuery');
@@ -603,62 +561,6 @@ const Dashboard = () => {
   useEffect(() => {
     localStorage.setItem('alertConfig', JSON.stringify(alertConfig));
   }, [alertConfig]);
-
-  // Function to update the queue time threshold
-  const updateQueuedTimeThreshold = (minutes) => {
-    setAlertConfig(prev => ({
-      ...prev,
-      queuedTimeAlertThreshold: minutes
-    }));
-  };
-
-  // Setup auto-refresh based on dashboard settings
-  useEffect(() => {
-    // Clear any existing refresh timer
-    if (refreshTimerRef.current) {
-      clearInterval(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
-    
-    // If refresh is enabled, set up the timer
-    if (dashboardSettings.refreshEnabled) {
-      refreshTimerRef.current = setInterval(() => {
-        console.log(`Auto-refreshing dashboard (interval: ${dashboardSettings.refreshInterval}s)`);
-        fetchWorkflowRuns();
-        fetchActiveMetrics();
-      }, dashboardSettings.refreshInterval * 1000);
-    }
-    
-    // Cleanup on component unmount
-    return () => {
-      if (refreshTimerRef.current) {
-        clearInterval(refreshTimerRef.current);
-        refreshTimerRef.current = null;
-      }
-    };
-  }, [dashboardSettings.refreshEnabled, dashboardSettings.refreshInterval]);
-
-  // Update dashboard settings whenever they change in localStorage
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'dashboardSettings') {
-        try {
-          const newSettings = JSON.parse(e.newValue);
-          if (newSettings) {
-            setDashboardSettings(newSettings);
-          }
-        } catch (err) {
-          console.error('Error parsing dashboard settings from localStorage:', err);
-        }
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
 
   if (loading) {
     return (
@@ -978,7 +880,7 @@ const Dashboard = () => {
 
                         {/* Workflows */}
                         <Box sx={{ p: 2.5 }}>
-                          <Grid 
+                          <Grid2 
                             container 
                             spacing={2}
                             columns={{ xs: 4, sm: 8, md: 12, lg: 16, xl: 40 }}
@@ -1111,7 +1013,7 @@ const Dashboard = () => {
                                 </Box>
                               </Box>
                             ))}
-                          </Grid>
+                          </Grid2>
                         </Box>
                       </Paper>
                     ))}

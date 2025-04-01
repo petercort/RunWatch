@@ -8,6 +8,7 @@ import {
   CircularProgress,
   List,
   ListItem,
+  FormHelperText,
   ListItemText,
   ListItemButton,
   Divider,
@@ -20,24 +21,13 @@ import {
   Chip,
   Card,
   CardContent,
-  FormHelperText,
-  Grid,
-  Slider,
-  TextField,
-  Switch,
-  FormControlLabel
+  Grid2
 } from '@mui/material';
-import { Sync as SyncIcon, ExpandMore as ExpandMoreIcon, Save as SaveIcon, Restore as RestoreIcon, Notifications as NotificationsIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Sync as SyncIcon, Save as SaveIcon, Restore as RestoreIcon } from '@mui/icons-material';
 import apiService from '../../api/apiService';
-import { socket, defaultAlertConfig } from '../../api/socketService';
+import { socket } from '../../api/socketService';
 import { formatDistanceToNow } from 'date-fns';
 import SyncHistoryDetails from './SyncHistoryDetails';
-
-// Define default dashboard settings
-const defaultDashboardSettings = {
-  refreshEnabled: true,
-  refreshInterval: 30 // seconds
-};
 
 const Settings = () => {
   const [syncing, setSyncing] = useState(false);
@@ -57,19 +47,7 @@ const Settings = () => {
   const [dbStatus, setDbStatus] = useState(null);
   const [restoreMessage, setRestoreMessage] = useState(null);
   const [restoreMessageType, setRestoreMessageType] = useState('success');
-  const [alertConfig, setAlertConfig] = useState(() => {
-    const savedConfig = localStorage.getItem('alertConfig');
-    return savedConfig ? JSON.parse(savedConfig) : defaultAlertConfig;
-  });
-  const [alertConfigSaved, setAlertConfigSaved] = useState(false);
   
-  // Dashboard refresh settings
-  const [dashboardSettings, setDashboardSettings] = useState(() => {
-    const savedSettings = localStorage.getItem('dashboardSettings');
-    return savedSettings ? JSON.parse(savedSettings) : defaultDashboardSettings;
-  });
-  const [dashboardSettingsSaved, setDashboardSettingsSaved] = useState(false);
-
   const fetchActiveSync = async () => {
     try {
       const response = await apiService.getActiveSync();
@@ -281,45 +259,6 @@ const Settings = () => {
     }
   };
 
-  // Function to handle alert threshold changes
-  const handleQueuedTimeThresholdChange = (event, newValue) => {
-    setAlertConfig(prev => ({
-      ...prev,
-      queuedTimeAlertThreshold: newValue
-    }));
-    setAlertConfigSaved(false);
-  };
-
-  // Function to save alert configuration
-  const saveAlertConfig = () => {
-    localStorage.setItem('alertConfig', JSON.stringify(alertConfig));
-    setAlertConfigSaved(true);
-    
-    // Show saved message briefly
-    setTimeout(() => {
-      setAlertConfigSaved(false);
-    }, 3000);
-  };
-
-  // Function to handle dashboard refresh settings
-  const handleDashboardRefreshChange = (event) => {
-    const { checked } = event.target;
-    setDashboardSettings(prev => ({
-      ...prev,
-      refreshEnabled: checked
-    }));
-    setDashboardSettingsSaved(false);
-  };
-
-  // Function to handle dashboard refresh interval changes
-  const handleDashboardRefreshIntervalChange = (event, newValue) => {
-    setDashboardSettings(prev => ({
-      ...prev,
-      refreshInterval: newValue
-    }));
-    setDashboardSettingsSaved(false);
-  };
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -330,206 +269,14 @@ const Settings = () => {
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', py: 4 }}>
-      {/* Notifications Settings */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <NotificationsIcon color="primary" fontSize="small" />
-          Notification Settings
-        </Typography>
-        
-        <Box sx={{ mb: 3 }}>
-          <Typography id="queued-time-threshold-slider" gutterBottom variant="subtitle2">
-            Queue Time Alert Threshold (minutes)
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Slider
-              value={alertConfig.queuedTimeAlertThreshold}
-              onChange={handleQueuedTimeThresholdChange}
-              aria-labelledby="queued-time-threshold-slider"
-              valueLabelDisplay="auto"
-              step={1}
-              marks={[
-                { value: 1, label: '1m' },
-                { value: 5, label: '5m' },
-                { value: 10, label: '10m' },
-                { value: 15, label: '15m' },
-                { value: 30, label: '30m' }
-              ]}
-              min={1}
-              max={30}
-              sx={{
-                width: '70%',
-                '& .MuiSlider-thumb': {
-                  height: 16,
-                  width: 16,
-                  bgcolor: '#58A6FF',
-                },
-                '& .MuiSlider-track': {
-                  bgcolor: '#58A6FF',
-                },
-                '& .MuiSlider-rail': {
-                  bgcolor: 'rgba(88, 166, 255, 0.2)',
-                }
-              }}
-            />
-            <TextField
-              value={alertConfig.queuedTimeAlertThreshold}
-              onChange={(e) => {
-                const value = parseInt(e.target.value);
-                if (!isNaN(value) && value > 0 && value <= 60) {
-                  handleQueuedTimeThresholdChange(null, value);
-                }
-              }}
-              type="number"
-              InputProps={{
-                inputProps: { 
-                  min: 1, 
-                  max: 60,
-                  style: { textAlign: 'center' }
-                }
-              }}
-              size="small"
-              sx={{ width: '80px' }}
-            />
-          </Box>
-          <FormHelperText>
-            Display when a workflow has been queued longer than this threshold
-          </FormHelperText>
-          
-          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button 
-              variant="contained" 
-              size="small"
-              startIcon={<SaveIcon />}
-              onClick={saveAlertConfig}
-              sx={{
-                bgcolor: alertConfigSaved ? 'rgba(35, 197, 98, 0.1)' : 'rgba(88, 166, 255, 0.1)',
-                color: alertConfigSaved ? '#23C562' : '#58A6FF',
-                '&:hover': {
-                  bgcolor: alertConfigSaved ? 'rgba(35, 197, 98, 0.2)' : 'rgba(88, 166, 255, 0.2)',
-                }
-              }}
-            >
-              {alertConfigSaved ? 'Saved' : 'Save Settings'}
-            </Button>
-          </Box>
-        </Box>
-        
-        <Divider sx={{ my: 3 }} />
-        
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <RefreshIcon color="primary" fontSize="small" />
-          Dashboard Refresh Settings
-        </Typography>
-        
-        <Box sx={{ mb: 2 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={dashboardSettings.refreshEnabled}
-                onChange={handleDashboardRefreshChange}
-                color="primary"
-              />
-            }
-            label="Enable automatic dashboard refresh"
-          />
-          
-          <Box sx={{ mt: 2 }}>
-            <Typography id="refresh-interval-slider" gutterBottom variant="subtitle2">
-              Refresh Interval (seconds)
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Slider
-                value={dashboardSettings.refreshInterval}
-                onChange={handleDashboardRefreshIntervalChange}
-                aria-labelledby="refresh-interval-slider"
-                valueLabelDisplay="auto"
-                step={10}
-                marks={[
-                  { value: 10, label: '10s' },
-                  { value: 30, label: '30s' },
-                  { value: 60, label: '1m' },
-                  { value: 120, label: '2m' },
-                  { value: 300, label: '5m' }
-                ]}
-                min={10}
-                max={300}
-                disabled={!dashboardSettings.refreshEnabled}
-                sx={{
-                  width: '70%',
-                  opacity: dashboardSettings.refreshEnabled ? 1 : 0.5,
-                  '& .MuiSlider-thumb': {
-                    height: 16,
-                    width: 16,
-                    bgcolor: '#58A6FF',
-                  },
-                  '& .MuiSlider-track': {
-                    bgcolor: '#58A6FF',
-                  },
-                  '& .MuiSlider-rail': {
-                    bgcolor: 'rgba(88, 166, 255, 0.2)',
-                  }
-                }}
-              />
-              <TextField
-                value={dashboardSettings.refreshInterval}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value);
-                  if (!isNaN(value) && value >= 10 && value <= 600) {
-                    handleDashboardRefreshIntervalChange(null, value);
-                  }
-                }}
-                type="number"
-                InputProps={{
-                  inputProps: { 
-                    min: 10, 
-                    max: 600,
-                    style: { textAlign: 'center' }
-                  }
-                }}
-                size="small"
-                sx={{ width: '80px' }}
-                disabled={!dashboardSettings.refreshEnabled}
-              />
-            </Box>
-            <FormHelperText>
-              How frequently the dashboard will automatically refresh data (10 seconds to 10 minutes)
-            </FormHelperText>
-          </Box>
-          
-          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button 
-              variant="contained" 
-              size="small"
-              startIcon={<SaveIcon />}
-              onClick={() => {
-                localStorage.setItem('dashboardSettings', JSON.stringify(dashboardSettings));
-                setDashboardSettingsSaved(true);
-                setTimeout(() => setDashboardSettingsSaved(false), 3000);
-              }}
-              sx={{
-                bgcolor: dashboardSettingsSaved ? 'rgba(35, 197, 98, 0.1)' : 'rgba(88, 166, 255, 0.1)',
-                color: dashboardSettingsSaved ? '#23C562' : '#58A6FF',
-                '&:hover': {
-                  bgcolor: dashboardSettingsSaved ? 'rgba(35, 197, 98, 0.2)' : 'rgba(88, 166, 255, 0.2)',
-                }
-              }}
-              disabled={!dashboardSettings.refreshEnabled && dashboardSettings.refreshInterval === defaultDashboardSettings.refreshInterval}
-            >
-              {dashboardSettingsSaved ? 'Saved' : 'Save Settings'}
-            </Button>
-          </Box>
-        </Box>
-      </Paper>
-
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           Database Health
         </Typography>
         {dbStatus ? (
           <>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={3}>
+            <Grid2 container spacing={2}>
+              <Grid2 item xs={12} sm={6} md={3}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -542,8 +289,8 @@ const Settings = () => {
                     />
                   </CardContent>
                 </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              </Grid2>
+              <Grid2 item xs={12} sm={6} md={3}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -554,8 +301,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              </Grid2>
+              <Grid2 item xs={12} sm={6} md={3}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -566,8 +313,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              </Grid2>
+              <Grid2 item xs={12} sm={6} md={3}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -578,8 +325,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              </Grid2>
+              <Grid2 item xs={12} sm={6} md={3}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -590,8 +337,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              </Grid2>
+              <Grid2 item xs={12} sm={6} md={3}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -602,8 +349,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              </Grid2>
+              <Grid2 item xs={12} sm={6} md={3}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -614,8 +361,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              </Grid2>
+              <Grid2 item xs={12} sm={6} md={3}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -627,8 +374,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid>
-            </Grid>
+              </Grid2>
+            </Grid2>
 
             {restoreMessage && (
               <Alert 

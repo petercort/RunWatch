@@ -68,8 +68,8 @@ const loadExistingQueuedWorkflows = async (alertConfig = defaultAlertConfig) => 
 
 // Function to check if a workflow has been queued for too long
 const checkQueuedWorkflows = (alertConfig = defaultAlertConfig) => {
+  const threshold = alertConfig?.queuedTimeAlertThreshold || defaultAlertConfig.queuedTimeAlertThreshold;
   const now = new Date();
-  const threshold = alertConfig.queuedTimeAlertThreshold || 5; // Default 5 minutes
 
   console.log(`Checking ${queuedWorkflows.size} queued workflows against threshold of ${threshold} minutes`);
   
@@ -213,6 +213,5 @@ export const setupSocketListeners = (callbacks) => {
 
 export default {
   socket,
-  setupSocketListeners,
-  defaultAlertConfig
+  setupSocketListeners
 };
