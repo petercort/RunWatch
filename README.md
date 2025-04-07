@@ -220,18 +220,18 @@ The application can be deployed using Docker and Docker Compose. This will creat
 
 4. Use the deployment script to manage the application:
 
-   - `./deploy.sh start` - Start all services
-   - `./deploy.sh stop` - Stop all services
-   - `./deploy.sh restart` - Restart all services
-   - `./deploy.sh logs` - Show logs from all services
-   - `./deploy.sh build` - Rebuild all services
-   - `./deploy.sh clean` - Remove all containers and volumes
-   - `./deploy.sh status` - Show status of all services
+   - `sh deploy.sh start` - Start all services
+   - `sh deploy.sh stop` - Stop all services
+   - `sh deploy.sh restart` - Restart all services
+   - `sh deploy.sh logs` - Show logs from all services
+   - `sh deploy.sh build` - Rebuild all services
+   - `sh deploy.sh clean` - Remove all containers and volumes
+   - `sh deploy.sh status` - Show status of all services
 
 5. Access the application:
 
-- Frontend: http://localhost
-- Backend API: http://localhost/api
+- Frontend: <http://localhost>
+- Backend API: <http://localhost/api>
 - WebSocket: ws://localhost/socket.io
 
 #### Container Management
