@@ -9,25 +9,46 @@ import {
   Tooltip,
   Card,
   CardContent,
-  Link,
   Button,
   Stack,
-  CircularProgress,
-  Divider,
+  CircularProgress
 } from '@mui/material';
-import {
-  ArrowBack as BackIcon,
-  GitHub as GitHubIcon,
-  Assessment as AssessmentIcon,
-  Schedule as ScheduleIcon,
-  TrendingUp as TrendingUpIcon,
-  BugReport as BugIcon,
-  AccessTime as TimeIcon,
-} from '@mui/icons-material';
+import BackIcon from '@mui/icons-material/ArrowBack';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import BugIcon from '@mui/icons-material/BugReport';
+import TimeIcon from '@mui/icons-material/AccessTime';
 import { Line, Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip as ChartTooltip,
+  Legend,
+  Filler
+} from 'chart.js';
 import { formatDuration, formatDate } from '../../common/utils/statusHelpers';
 import apiService from '../../api/apiService';
 import { setupSocketListeners } from '../../api/socketService';
+
+// Register the chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  ChartTooltip,
+  Legend,
+  Filler
+);
 
 const RepositoryView = () => {
   const { repoName } = useParams();
@@ -322,7 +343,7 @@ const RepositoryView = () => {
 
       <Grid container spacing={2}>
         {/* Overview Stats */}
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 12, sm:6, md:3 }}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
@@ -336,7 +357,7 @@ const RepositoryView = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 12, sm:6, md:3 }}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
@@ -350,7 +371,7 @@ const RepositoryView = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 12, sm:6, md:3 }}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
@@ -364,7 +385,7 @@ const RepositoryView = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 12, sm:6, md:3 }}>
           <Card sx={{ bgcolor: '#161B22', border: '1px solid rgba(240, 246, 252, 0.1)' }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
@@ -379,7 +400,7 @@ const RepositoryView = () => {
         </Grid>
 
         {/* Activity Trends Chart */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, sm:6, md:3 }}>
           <Paper elevation={0} sx={{ 
             p: 2,
             height: '100%',
@@ -428,7 +449,7 @@ const RepositoryView = () => {
         </Grid>
 
         {/* Workflow Comparison */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, sm:6, md:3 }}>
           <Paper elevation={0} sx={{ 
             p: 2,
             height: '100%',
@@ -471,7 +492,7 @@ const RepositoryView = () => {
         </Grid>
 
         {/* Workflow Details */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12, sm:6, md:3 }}>
           <Paper elevation={0} sx={{ 
             p: 2,
             bgcolor: '#161B22',

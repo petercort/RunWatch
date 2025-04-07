@@ -12,40 +12,33 @@ import {
   Tooltip,
   Stack,
 } from '@mui/material';
-import {
-  Refresh as RefreshIcon,
-  TrendingUp as TrendingUpIcon,
-  Check as SuccessIcon,
-  Close as FailureIcon,
-  GitHub as GitHubIcon,
-} from '@mui/icons-material';
-import {
-  Chart as ChartJS,
+// Replace bulk icon imports with direct path imports
+import RefreshIcon from '@mui/icons-material/Refresh';
+
+import GitHubIcon from '@mui/icons-material/GitHub';
+
+// Only import the Chart.js components you actually use
+import { 
+  Chart as ChartJS, 
   CategoryScale,
   LinearScale,
   BarElement,
   Title,
   Tooltip as ChartTooltip,
-  Legend,
-  ArcElement,
-  PointElement,
-  LineElement,
+  Legend 
 } from 'chart.js';
-import { Bar, Pie, Line } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import apiService from '../../api/apiService';
 import { useNavigate } from 'react-router-dom';
 
-// Register ChartJS components
+// Register only the ChartJS components you need
 ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
   Title,
   ChartTooltip,
-  Legend,
-  ArcElement,
-  PointElement,
-  LineElement
+  Legend
 );
 
 const RepositoryStats = () => {

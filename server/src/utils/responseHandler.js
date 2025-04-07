@@ -19,7 +19,12 @@ export const errorResponse = (res, message = 'Internal server error', statusCode
   };
 
   if (error && process.env.NODE_ENV === 'development') {
-    response.error = error.toString();
+    // Safely extract error information without serializing the entire object
+    response.errorDetails = {
+      message: error.message || 'Unknown error',
+      name: error.name || 'Error',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    };
   }
 
   return res.status(statusCode).json(response);

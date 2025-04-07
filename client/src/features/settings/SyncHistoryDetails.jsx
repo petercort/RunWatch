@@ -13,7 +13,7 @@ import {
   Alert,
   IconButton
 } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
 import { format } from 'date-fns';
 import { socket } from '../../api/socketService';
 import apiService from '../../api/apiService';
@@ -219,20 +219,20 @@ const SyncHistoryDetails = ({ sync: initialSync, onClose }) => {
               )}
 
               <Box>
-                <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="subtitle1" gutterBottom component="div">
                   Results Summary
                 </Typography>
                 {(() => {
                   const summary = getResultsSummary();
                   return (
                     <>
-                      <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ mb: 0.5 }} component="div">
                         Repositories Processed: {summary.repositories}/{summary.totalRepositories}
                       </Typography>
-                      <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ mb: 0.5 }} component="div">
                         Workflows Processed: {summary.workflows}
                       </Typography>
-                      <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ mb: 0.5 }} component="div">
                         Runs Processed: {summary.runs}
                       </Typography>
                     </>

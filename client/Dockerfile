@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine as build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
@@ -7,19 +7,13 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install --legacy-peer-deps
+RUN npm install
 
 # Copy source
 COPY . .
 
-# Set environment variables for the build
-ARG REACT_APP_API_URL=http://localhost/api
-ARG REACT_APP_WEBSOCKET_URL=ws://localhost
-ENV REACT_APP_API_URL=${REACT_APP_API_URL}
-ENV REACT_APP_WEBSOCKET_URL=${REACT_APP_WEBSOCKET_URL}
-
 # Build the app
-RUN npm run build
+RUN npm run build:prod
 
 # Serve stage
 FROM nginx:alpine

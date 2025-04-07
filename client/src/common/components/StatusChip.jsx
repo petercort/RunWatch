@@ -1,12 +1,10 @@
 import React from 'react';
 import { Chip, keyframes } from '@mui/material';
-import {
-  PlayCircle as QueuedIcon,
-  RotateRight as InProgressIcon,
-  CheckCircle as SuccessIcon,
-  Cancel as FailureIcon,
-  Warning as WarningIcon,
-} from '@mui/icons-material';
+import QueuedIcon from '@mui/icons-material/PlayCircle';
+import InProgressIcon from '@mui/icons-material/RotateRight';
+import SuccessIcon from '@mui/icons-material/CheckCircle';
+import FailureIcon from '@mui/icons-material/Cancel';
+import WarningIcon from '@mui/icons-material/Warning';
 
 const rotate = keyframes`
   from { transform: rotate(0deg); }

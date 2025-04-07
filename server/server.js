@@ -1,8 +1,7 @@
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
-import { config } from 'dotenv';
-import { createNodeMiddleware } from '@octokit/webhooks';
+import { createNodeMiddleware as _createNodeMiddleware } from '@octokit/webhooks';
 import connectDB from './src/config/db.js';
 import apiRoutes from './src/routes/api.js';
 import setupSocket from './src/middleware/socket.js';
@@ -12,9 +11,6 @@ import { fileURLToPath } from 'url';
 import getRawBody from 'raw-body';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Load environment variables from root .env
-config({ path: path.join(__dirname, '../.env') });
 
 // Connect to database
 connectDB();
@@ -124,7 +120,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api', apiRoutes);
 
 // Error handling middleware
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',

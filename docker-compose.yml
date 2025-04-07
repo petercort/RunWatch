@@ -1,15 +1,17 @@
-version: '3.8'
-
 services:
   # MongoDB service
   mongodb:
     image: mongo:latest
     container_name: runwatch-mongodb
     restart: always
+    env_file: .env
     environment:
-      MONGO_INITDB_DATABASE: runwatch
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
     volumes:
       - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
     ports:
       - "27017:27017"
     networks:
@@ -28,10 +30,11 @@ services:
       dockerfile: Dockerfile
     container_name: runwatch-server
     restart: always
+    env_file: .env
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 5001
-      MONGODB_URI: mongodb://mongodb:27017/runwatch
+      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_INITDB_DATABASE}?authSource=admin
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
       CLIENT_URL: ${CLIENT_URL:-http://localhost}
       GITHUB_APP_ID: ${GITHUB_APP_ID}
@@ -55,8 +58,8 @@ services:
       context: ./client
       dockerfile: Dockerfile
       args:
-        REACT_APP_API_URL: http://localhost/api
-        REACT_APP_WEBSOCKET_URL: ws://localhost
+        VITE_APP_API_URL: ${VITE_APP_API_URL}
+        VITE_APP_WEBSOCKET_URL: ${VITE_APP_WEBSOCKET_URL}
     container_name: runwatch-client
     restart: always
     ports:

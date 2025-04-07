@@ -1,11 +1,13 @@
 import express from 'express';
 import * as workflowController from '../controllers/workflowController.js';
-import { syncGitHubData, getAvailableOrganizations, getSyncHistory } from '../services/syncService.js';
-import { validateGitHubConfig } from '../utils/githubAuth.js';
-import SyncHistory from '../models/SyncHistory.js';
+import * as runnerController from '../controllers/runnerController.js';
+import * as syncController from '../controllers/syncController.js';
+import * as githubController from '../controllers/githubController.js';
+import * as repositoryController from '../controllers/repositoryController.js';
 
 const router = express.Router();
 
+// Workflow Routes
 // Health check endpoint
 router.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
@@ -50,86 +52,22 @@ router.get('/db/status', workflowController.getDatabaseStatus);
 router.get('/database/backup', workflowController.createBackup);
 router.post('/database/restore', workflowController.restoreBackup);
 
-// Get available organizations
-router.get('/organizations', async (req, res) => {
-    try {
-        validateGitHubConfig();
-        const organizations = await getAvailableOrganizations();
-        res.json({
-            success: true,
-            data: organizations
-        });
-    } catch (error) {
-        console.error('Error fetching organizations:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch organizations',
-            error: error.message
-        });
-    }
-});
+// Runner Routes
+router.get('/runners/self-hosted', runnerController.getSelfHostedRunners);
+router.get('/runners/github-hosted', runnerController.getGitHubHostedRunners);
+router.get('/runners/groups/all', runnerController.getAllRunnerGroups);
+router.get('/runners/groups/:level/:name', runnerController.getRunnerGroups);
 
-// Get sync history
-router.get('/sync/history', async (req, res) => {
-    try {
-        const history = await getSyncHistory();
-        res.json({
-            success: true,
-            data: history
-        });
-    } catch (error) {
-        console.error('Error fetching sync history:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch sync history',
-            error: error.message
-        });
-    }
-});
+// Sync Routes
+router.get('/organizations', syncController.getOrganizations);
+router.get('/sync/history', syncController.getSyncHistory);
+router.get('/sync/active', syncController.getActiveSyncStatus);
+router.post('/sync/:installationId', syncController.syncGitHubData);
 
-// Get active sync status
-router.get('/sync/active', async (req, res) => {
-    try {
-        const activeSync = await SyncHistory.findOne({
-            status: { $in: ['in_progress', 'paused'] }
-        }).sort({ startedAt: -1 });
-        
-        res.json({
-            success: true,
-            data: activeSync
-        });
-    } catch (error) {
-        console.error('Error fetching active sync:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch active sync status',
-            error: error.message
-        });
-    }
-});
+// GitHub Client Routes
+router.get('/github/client/:installationId', githubController.getClient);
 
-// Sync endpoint using installation ID
-router.post('/sync/:installationId', async (req, res) => {
-    try {
-        validateGitHubConfig();
-        const { installationId } = req.params;
-        const { maxWorkflowRuns = 100 } = req.body;
-        
-        const results = await syncGitHubData(installationId, req.io, { maxWorkflowRuns });
-        
-        res.json({
-            success: true,
-            message: 'GitHub data sync completed successfully',
-            results
-        });
-    } catch (error) {
-        console.error('Sync error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to sync GitHub data',
-            error: error.message
-        });
-    }
-});
+// Repository Routes
+router.get('/repositories/:orgName', repositoryController.getRepositories);
 
 export default router;

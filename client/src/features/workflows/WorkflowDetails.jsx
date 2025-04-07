@@ -14,12 +14,10 @@ import {
   Collapse,
   Link
 } from '@mui/material';
-import {
-  ArrowBack as BackIcon,
-  ExpandMore as ExpandMoreIcon,
-  Schedule as ScheduleIcon,
-  History as HistoryIcon,
-} from '@mui/icons-material';
+import BackIcon from '@mui/icons-material/ArrowBack';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import HistoryIcon from '@mui/icons-material/History';
 import apiService from '../../api/apiService';
 import { setupSocketListeners } from '../../api/socketService';
 import StatusChip from '../../common/components/StatusChip';
@@ -166,7 +164,7 @@ const WorkflowDetails = () => {
       </Box>
 
       <Grid container spacing={3}>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12, sm:6, md:3 }}>
           <Paper elevation={0} sx={{ 
             p: 3, 
             mb: 3,
@@ -175,7 +173,7 @@ const WorkflowDetails = () => {
             border: '1px solid rgba(240, 246, 252, 0.1)'
           }}>
             <Grid container spacing={3} alignItems="center">
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Typography variant="body2" sx={{ color: '#8B949E', mb: 1 }}>Status</Typography>
                 <StatusChip 
                   status={workflow.run.status} 
@@ -183,7 +181,7 @@ const WorkflowDetails = () => {
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <ScheduleIcon sx={{ fontSize: '1.2rem', mr: 1, color: '#8B949E' }} />
                   <Box>
@@ -195,7 +193,7 @@ const WorkflowDetails = () => {
                 </Box>
               </Grid>
               
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <HistoryIcon sx={{ fontSize: '1.2rem', mr: 1, color: '#8B949E' }} />
                   <Box>
@@ -253,7 +251,7 @@ const WorkflowDetails = () => {
           </Paper>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12, sm:6, md:3 }}>
           <Typography variant="h5" sx={{ 
             mb: 2, 
             color: '#E6EDF3',

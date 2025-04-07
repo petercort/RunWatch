@@ -22,7 +22,7 @@ export const getAllWorkflowRuns = async (req, res) => {
     const skip = (page - 1) * pageSize;
 
     // Build the query with search and status filters
-    let query = {};
+    const query = {};
     if (searchQuery) {
       query['repository.fullName'] = { $regex: searchQuery, $options: 'i' };
     }
@@ -281,7 +281,7 @@ export const restoreBackup = async (req, res) => {
           // Drop existing collection
           try {
             await db.collection(collectionName).drop();
-          } catch (err) {
+          } catch (_err) {
             // Collection might not exist, continue
           }
 
