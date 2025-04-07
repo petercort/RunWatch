@@ -16,16 +16,14 @@ import {
   useTheme,
   useMediaQuery
 } from '@mui/material';
-import {
-  Menu as MenuIcon,
-  Dashboard as DashboardIcon,
-  Assessment as AssessmentIcon,
-  GitHub as GitHubIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-  Settings as SettingsIcon,
-  Groups as GroupsIcon
-} from '@mui/icons-material';
+import MenuIcon from '@mui/icons-material/Menu';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import SettingsIcon from '@mui/icons-material/Settings';
+import GroupsIcon from '@mui/icons-material/Groups';
 
 const expandedWidth = 280;
 const collapsedWidth = 72;

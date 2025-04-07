@@ -5,15 +5,22 @@ import WorkflowDetails from '../WorkflowDetails';
 import apiService from '../../../api/apiService';
 import { setupSocketListeners } from '../../../api/socketService';
 import { mockNavigate } from 'react-router-dom';
+import { vi } from 'vitest';
 
 // Mock the API service and socket service
-jest.mock('../../../api/apiService', () => ({
-  getWorkflowRunById: jest.fn()
-}));
+vi.mock('../../../api/apiService', () => {
+  return {
+    default: {
+      getWorkflowRunById: vi.fn()
+    }
+  };
+});
 
-jest.mock('../../../api/socketService', () => ({
-  setupSocketListeners: jest.fn()
-}));
+vi.mock('../../../api/socketService', () => {
+  return {
+    setupSocketListeners: vi.fn()
+  };
+});
 
 // react-router-dom is mocked in the __mocks__ directory
 // No need to manually mock it here
@@ -23,20 +30,33 @@ describe('WorkflowDetails Component', () => {
   const mockWorkflow = {
     workflow: {
       id: 1,
-      name: 'Test Workflow'
+      name: 'Test Workflow',
+      path: '.github/workflows/test.yml'
     },
     run: {
       id: 100,
-      status: 'completed',
-      conclusion: 'success',
       number: 42,
       created_at: '2025-04-01T10:00:00Z',
       updated_at: '2025-04-01T10:30:00Z',
-      url: 'https://github.com/test-org/test-repo/actions/runs/100'
+      status: 'completed',
+      conclusion: 'success',
+      url: 'https://github.com/test-org/test-repo/actions/runs/100',
+      head_branch: 'main',
+      event: 'push',
+      labels: ['self-hosted', 'linux'],
+      runner_id: 123,
+      runner_name: 'self-hosted-runner',
+      runner_group_id: 456,
+      runner_group_name: 'Default'
     },
     repository: {
       id: 201,
+      name: 'test-repo',
       fullName: 'test-org/test-repo',
+      owner: {
+        login: 'test-org',
+        url: 'https://github.com/test-org'
+      },
       url: 'https://github.com/test-org/test-repo'
     },
     jobs: [
@@ -47,9 +67,12 @@ describe('WorkflowDetails Component', () => {
         conclusion: 'success',
         started_at: '2025-04-01T10:05:00Z',
         completed_at: '2025-04-01T10:15:00Z',
+        runner_id: 123,
         runner_name: 'ubuntu-latest',
+        runner_group_id: 456,
         runner_group_name: 'GitHub Actions',
         runner_os: 'Linux',
+        runner_version: '2.300.1',
         runner_image_version: '20.04',
         steps: [
           {
@@ -77,9 +100,12 @@ describe('WorkflowDetails Component', () => {
         conclusion: 'success',
         started_at: '2025-04-01T10:16:00Z',
         completed_at: '2025-04-01T10:25:00Z',
+        runner_id: 123,
         runner_name: 'ubuntu-latest',
+        runner_group_id: 456,
         runner_group_name: 'GitHub Actions',
         runner_os: 'Linux',
+        runner_version: '2.300.1',
         runner_image_version: '20.04',
         steps: [
           {
@@ -97,7 +123,7 @@ describe('WorkflowDetails Component', () => {
 
   // Setup for each test
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Reset mock navigate
     mockNavigate.mockClear();
@@ -106,7 +132,7 @@ describe('WorkflowDetails Component', () => {
     apiService.getWorkflowRunById.mockResolvedValue(mockWorkflow);
     
     // Mock socket listener setup
-    setupSocketListeners.mockReturnValue(jest.fn());
+    setupSocketListeners.mockReturnValue(vi.fn());
   });
 
   test('renders loading state initially', async () => {

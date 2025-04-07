@@ -21,9 +21,11 @@ import {
   Chip,
   Card,
   CardContent,
-  Grid2
+  Grid
 } from '@mui/material';
-import { Sync as SyncIcon, Save as SaveIcon, Restore as RestoreIcon } from '@mui/icons-material';
+import SyncIcon from '@mui/icons-material/Sync';
+import SaveIcon from '@mui/icons-material/Save';
+import RestoreIcon from '@mui/icons-material/Restore';
 import apiService from '../../api/apiService';
 import { socket } from '../../api/socketService';
 import { formatDistanceToNow } from 'date-fns';
@@ -275,8 +277,8 @@ const Settings = () => {
         </Typography>
         {dbStatus ? (
           <>
-            <Grid2 container spacing={2}>
-              <Grid2 item xs={12} sm={6} md={3}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -289,8 +291,8 @@ const Settings = () => {
                     />
                   </CardContent>
                 </Card>
-              </Grid2>
-              <Grid2 item xs={12} sm={6} md={3}>
+              </Grid>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -301,20 +303,20 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid2>
-              <Grid2 item xs={12} sm={6} md={3}>
+              </Grid>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
-                      Storage Size
+                      Storage Size 
                     </Typography>
                     <Typography variant="h6">
                       {`${(dbStatus.storageSize / (1024 * 1024)).toFixed(1)} MB`}
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid2>
-              <Grid2 item xs={12} sm={6} md={3}>
+              </Grid>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -325,8 +327,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid2>
-              <Grid2 item xs={12} sm={6} md={3}>
+              </Grid>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -337,8 +339,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid2>
-              <Grid2 item xs={12} sm={6} md={3}>
+              </Grid>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -349,8 +351,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid2>
-              <Grid2 item xs={12} sm={6} md={3}>
+              </Grid>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -361,8 +363,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid2>
-              <Grid2 item xs={12} sm={6} md={3}>
+              </Grid>
+              <Grid size={{ xs: 12, sm:6, md:3 }}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography color="text.secondary" gutterBottom variant="body2">
@@ -374,8 +376,8 @@ const Settings = () => {
                     </Typography>
                   </CardContent>
                 </Card>
-              </Grid2>
-            </Grid2>
+              </Grid>
+            </Grid>
 
             {restoreMessage && (
               <Alert 
@@ -499,6 +501,7 @@ const Settings = () => {
               onChange={(e) => setMaxWorkflowRuns(e.target.value)}
               disabled={syncing}
             >
+              <MenuItem value={1}>Last run</MenuItem>
               <MenuItem value={10}>Last 10 runs</MenuItem>
               <MenuItem value={50}>Last 50 runs</MenuItem>
               <MenuItem value={100}>Last 100 runs</MenuItem>
@@ -523,17 +526,17 @@ const Settings = () => {
         {syncing && (
           <Box sx={{ mt: 3 }}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" component="div" color="text.secondary">
                 {progress}% Complete
               </Typography>
               {syncDetails && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" component="div" color="text.secondary">
                   Repository {syncDetails.currentRepoIndex}/{syncDetails.totalRepos}
                   {syncDetails.currentWorkflowIndex !== undefined && ` • Workflow ${syncDetails.currentWorkflowIndex}/${syncDetails.totalWorkflows}`}
                 </Typography>
               )}
               {currentOperation && (
-                <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+                <Typography variant="body2" component="div" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
                   Current: {currentOperation.repo} - {currentOperation.workflow}
                 </Typography>
               )}
@@ -599,7 +602,7 @@ const Settings = () => {
 
             {results.errors && results.errors.length > 0 && (
               <Alert severity="warning" sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
+                <Typography variant="subtitle2" component="div" gutterBottom>
                   Some items failed to sync:
                 </Typography>
                 <List dense>
@@ -631,7 +634,7 @@ const Settings = () => {
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography>{sync.organization.name}</Typography>
+                      <Typography component="div">{sync.organization.name}</Typography>
                       <Chip 
                         label={sync.status} 
                         size="small"
@@ -647,7 +650,7 @@ const Settings = () => {
                   }
                   secondary={
                     <Box>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" component="div" color="text.secondary">
                         Started {formatDistanceToNow(new Date(sync.startedAt))} ago
                       </Typography>
                       {sync.status === 'in_progress' && sync.results?.progress && (
@@ -660,7 +663,7 @@ const Settings = () => {
                               borderRadius: 2,
                             }}
                           />
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" component="div" color="text.secondary">
                             {sync.results.progress.current}% Complete
                           </Typography>
                         </Box>
@@ -672,7 +675,7 @@ const Settings = () => {
             </React.Fragment>
           ))}
           {syncHistory.length === 0 && (
-            <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+            <Typography variant="body2" component="div" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
               No sync history available
             </Typography>
           )}

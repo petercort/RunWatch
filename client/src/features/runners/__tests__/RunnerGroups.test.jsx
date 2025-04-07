@@ -3,15 +3,20 @@ import { render, screen, waitFor, act, fireEvent, within } from '@testing-librar
 import '@testing-library/jest-dom';
 import RunnerGroups from '../RunnerGroups';
 import apiService from '../../../api/apiService';
+import { vi } from 'vitest';
 
 // Mock the API service
-jest.mock('../../../api/apiService', () => ({
-  getOrganizations: jest.fn(),
-  getAllRunnerGroups: jest.fn(),
-  getRepositories: jest.fn(),
-  getSelfHostedRunners: jest.fn(),
-  getGitHubHostedRunners: jest.fn(),
-}));
+vi.mock('../../../api/apiService', () => {
+  return {
+    default: {
+      getOrganizations: vi.fn(),
+      getAllRunnerGroups: vi.fn(),
+      getRepositories: vi.fn(),
+      getSelfHostedRunners: vi.fn(),
+      getGitHubHostedRunners: vi.fn(),
+    }
+  };
+});
 
 describe('RunnerGroups Component', () => {
   // Sample test data
@@ -63,32 +68,40 @@ describe('RunnerGroups Component', () => {
 
   const mockSelfHostedRunners = [
     { 
-      id: 201, 
+      id: '201', 
       name: 'self-hosted-1', 
       status: 'online', 
       os: 'Linux', 
+      busy: false,
+      ephemeral: false,
       runner_group_id: 2,
       runner_group_name: 'Org Group 1',
-      labels: [{ name: 'self-hosted' }, { name: 'linux' }]
+      labels: [{ id: 1, name: 'self-hosted', type: 'read-only' }, { id: 2, name: 'linux', type: 'custom' }],
+      level: 'repository',
+      organization: 'test-org-1',
+      repository: 'repo-1'
     }
   ];
 
   const mockGitHubHostedRunners = [
     { 
-      id: 301, 
+      id: '301', 
       name: 'github-hosted-1', 
       status: 'Ready', 
       platform: 'ubuntu-latest', 
       runner_group_id: 3,
       runner_group_name: 'Org Group 2',
-      machine_size_details: { cpu_cores: 4, memory_gb: 16 }
+      machine_size_details: { cpu_cores: 4, memory_gb: 16 },
+      level: 'repository',
+      organization: 'test-org-1',
+      repository: 'repo-1'
     }
   ];
 
   // Setup for each test
   beforeEach(() => {
     // Reset all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Default mock implementations
     apiService.getOrganizations.mockResolvedValue({ data: mockOrganizations });

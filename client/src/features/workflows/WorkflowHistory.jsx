@@ -20,12 +20,10 @@ import {
   Stack,
   Chip,
 } from '@mui/material';
-import {
-  ArrowBack as BackIcon,
-  Schedule as ScheduleIcon,
-  TrendingUp as TrendingUpIcon,
-  Speed as SpeedIcon,
-} from '@mui/icons-material';
+import BackIcon from '@mui/icons-material/ArrowBack';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import SpeedIcon from '@mui/icons-material/Speed';
 import { Line } from 'react-chartjs-2';
 import StatusChip from '../../common/components/StatusChip';
 import { formatDuration, formatDate } from '../../common/utils/statusHelpers';

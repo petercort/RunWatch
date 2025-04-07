@@ -22,21 +22,16 @@ import {
   ListItemText,
   ListItemAvatar,
   Avatar,
-  Divider,
-  Tabs,
-  Tab
+  Divider
 } from '@mui/material';
-import { 
-  Computer as ComputerIcon, 
-  Groups as GroupsIcon, 
-  Business as BusinessIcon,
-  Description as DescriptionIcon,
-  Public as PublicIcon,
-  Lock as LockIcon,
-  Hub as HubIcon,
-  Engineering as EngineeringIcon,
-  ExpandMore as ExpandMoreIcon
-} from '@mui/icons-material';
+import ComputerIcon from '@mui/icons-material/Computer';
+import GroupsIcon from '@mui/icons-material/Groups';
+import BusinessIcon from '@mui/icons-material/Business';
+import PublicIcon from '@mui/icons-material/Public';
+import LockIcon from '@mui/icons-material/Lock';
+import HubIcon from '@mui/icons-material/Hub';
+import EngineeringIcon from '@mui/icons-material/Engineering';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import apiService from '../../api/apiService';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
@@ -61,7 +56,6 @@ const RunnerGroups = () => {
     organization: {}
   });
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
-  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   
   // New state for repository runners
   const [selfHostedRunners, setSelfHostedRunners] = useState([]);
@@ -214,8 +208,9 @@ const RunnerGroups = () => {
         apiService.getGitHubHostedRunners(options)
       ]);
       
-      // Clear preloaded runner details when repository changes
-      setPreloadedRunnerDetails({});
+      // Don't clear preloaded runner details when repository changes
+      // Instead, we'll preserve the existing runner group data
+      // setPreloadedRunnerDetails({});
       
       // Store runners in state
       setSelfHostedRunners(selfHostedRunnerData);
@@ -396,14 +391,24 @@ const RunnerGroups = () => {
   // Toggle expansion for a specific group
   const toggleGroupExpansion = (categoryName, groupId, ownerName = null) => {
     const groupKey = `${categoryName}-${groupId}`;
+    const isCurrentlyExpanded = expandedGroups[groupKey] || false;
+    
+    // Toggle the expansion state
     setExpandedGroups(prev => ({
       ...prev,
-      [groupKey]: !prev[groupKey]
+      [groupKey]: !isCurrentlyExpanded
     }));
 
-    // Only proceed if we're expanding and don't already have details
-    if (!expandedGroups[groupKey]) {
+    // Only proceed if we're expanding (not collapsing) the details
+    if (!isCurrentlyExpanded) {
       try {
+        // If we already have details in groupDetailsMap, use it
+        if (groupDetailsMap[groupKey]) {
+          // Do nothing - the details are already there and will be displayed
+          return;
+        }
+        
+        // If we have preloaded data, use it
         if (preloadedRunnerDetails[groupKey]) {
           // Use preloaded data if available
           setGroupDetailsMap(prev => ({
@@ -1227,7 +1232,7 @@ const RunnerGroups = () => {
                         bgcolor: 'rgba(35, 197, 98, 0.05)',
                       }}>
                         <EngineeringIcon sx={{ mr: 1, color: '#23C562', verticalAlign: 'middle' }} />
-                        Self-Hosted Runners for {selectedRepo} ({selfHostedRunners.length})
+                        Self-Hosted Runners ({selfHostedRunners.length})
                       </Typography>
                       
                       {isLoadingRepoRunners ? (
@@ -1300,70 +1305,7 @@ const RunnerGroups = () => {
                       )}
                     </Box>
                     
-                    {/* GitHub-hosted Runners */}
-                    <Box sx={{ mb: 4 }}>
-                      <Typography variant="h6" gutterBottom sx={{ 
-                        borderLeft: '4px solid #6E40C9',
-                        pl: 2,
-                        py: 1,
-                        bgcolor: 'rgba(110, 64, 201, 0.05)',
-                      }}>
-                        <HubIcon sx={{ mr: 1, color: '#6E40C9', verticalAlign: 'middle' }} />
-                        GitHub-Hosted Runners ({githubHostedRunners.length})
-                      </Typography>
-                      
-                      {githubHostedRunners.length > 0 ? (
-                        <TableContainer>
-                          <Table sx={{ minWidth: 650 }} size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Name</TableCell>
-                                <TableCell>Platform</TableCell>
-                                <TableCell>Status</TableCell>
-                                <TableCell>Repository</TableCell>
-                                <TableCell>Machine Size</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {githubHostedRunners.map((runner) => (
-                                <TableRow key={runner.id} sx={{ 
-                                  '&:hover': { bgcolor: 'rgba(88, 166, 255, 0.05)' }
-                                }}>
-                                  <TableCell>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                      <ComputerIcon sx={{ fontSize: '1rem', color: '#6E40C9' }} />
-                                      {runner.name}
-                                    </Box>
-                                  </TableCell>
-                                  <TableCell>{runner.platform || '-'}</TableCell>
-                                  <TableCell>
-                                    <Chip 
-                                      size="small" 
-                                      label={runner.status} 
-                                      color={runner.status === 'Ready' || runner.status === 'online' ? 'success' : 'warning'} 
-                                      variant="outlined"
-                                      sx={{ ml: 1 }}
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    {runner.repository || '-'}
-                                  </TableCell>
-                                  <TableCell>
-                                    {runner.machine_size_details ? 
-                                      `${runner.machine_size_details.cpu_cores} cores, ${runner.machine_size_details.memory_gb}GB RAM` : 
-                                      '-'}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      ) : (
-                        <Alert severity="info" sx={{ my: 2 }}>
-                          No GitHub-hosted runners found.
-                        </Alert>
-                      )}
-                    </Box>
+
                   </>
                 )}
               </>

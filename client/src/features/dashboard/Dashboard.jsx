@@ -20,14 +20,12 @@ import {
   InputLabel,
   ListSubheader,
 } from '@mui/material';
-import {
-  Refresh as RefreshIcon,
-  Book as BookIcon,
-  Search as SearchIcon,
-  Close as CloseIcon,
-  PlayArrow as PlayArrowIcon,
-  PendingActions as PendingIcon,
-} from '@mui/icons-material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import BookIcon from '@mui/icons-material/Book';
+import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PendingIcon from '@mui/icons-material/PendingActions';
 import apiService from '../../api/apiService';
 import { setupSocketListeners, socket, defaultAlertConfig } from '../../api/socketService';
 import { formatDuration, formatDate } from '../../common/utils/statusHelpers';
