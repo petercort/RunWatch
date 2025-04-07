@@ -2,7 +2,7 @@ import io from 'socket.io-client';
 import apiService from './apiService';
 
 // Update environment variables to use Vite's format
-const WS_URL = import.meta.env.VITE_APP_WEBSOCKET_URL || 'http://localhost:5001';
+const WS_URL = import.meta.env.VITE_APP_WEBSOCKET_URL || 'ws://localhost:5001';
 
 // Default configuration for alerts
 export const defaultAlertConfig = {

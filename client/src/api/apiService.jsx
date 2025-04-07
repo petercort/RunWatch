@@ -1,18 +1,8 @@
 import axios from 'axios';
-import io from 'socket.io-client';
 
-// Update environment variables to use Vite's format
 const API_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost/api';
-const WS_URL = import.meta.env.VITE_APP_WEBSOCKET_URL || 'ws://localhost';
 
-//console.log('Using API URL:', API_URL);
-//console.log('Using WebSocket URL:', WS_URL);
-
-// Create socket connection with environment-aware configuration
-export const socket = io(WS_URL, {
-  transports: ['websocket'],
-  path: '/socket.io'
-});
+console.log('Using API URL:', API_URL);
 
 // API Services
 const apiService = {

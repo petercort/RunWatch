@@ -47,6 +47,12 @@ export const processWorkflowRun = async (payload) => {
       }
     };
 
+    console.log('Processing workflow run with labels:', {
+      id: run.id,
+      labels: workflowRunData.run.labels,
+      status: run.status
+    });
+
     // Find existing run to preserve any existing labels if none provided
     const existingRun = await WorkflowRun.findOne({ 'run.id': run.id });
     if (existingRun && !workflowRunData.run.labels.length && existingRun.run.labels?.length) {
@@ -68,95 +74,6 @@ export const processWorkflowRun = async (payload) => {
   } catch (error) {
     console.error('Error processing workflow run:', error);
     throw error;
-  }
-};
-
-/**
- * Process multiple workflow runs in batch for better performance
- * @param {Array<Object>} payloads - Array of workflow run payloads
- * @returns {Promise<Array>} - Array of processed workflow runs
- */
-export const processWorkflowRunsBatch = async (payloads) => {
-  if (!payloads || payloads.length === 0) {
-    return [];
-  }
-
-  try {
-    // Prepare bulk operations for database
-    const bulkOps = payloads.map(payload => {
-      const { repository, workflow_run: run } = payload;
-      
-      // Create the workflow run data object
-      const workflowRunData = {
-        repository: {
-          id: repository.id,
-          name: repository.name,
-          fullName: repository.full_name,
-          owner: {
-            login: repository.owner.login,
-            url: transformGitHubUrl(repository.owner.html_url || repository.owner.url)
-          },
-          url: transformGitHubUrl(repository.html_url || repository.url)
-        },
-        workflow: {
-          id: run.workflow_id,
-          name: run.name,
-          path: run.path
-        },
-        run: {
-          id: run.id,
-          number: run.run_number,
-          created_at: run.created_at,
-          updated_at: run.updated_at,
-          status: run.status,
-          conclusion: run.status === 'completed' ? run.conclusion : null,
-          url: transformGitHubUrl(run.html_url),
-          head_branch: run.head_branch,
-          event: run.event,
-          labels: run.labels || [], // Ensure labels are always set
-          runner_id: run.runner_id,
-          runner_name: run.runner_name,
-          runner_group_id: run.runner_group_id,
-          runner_group_name: run.runner_group_name
-        }
-      };
-
-      return {
-        updateOne: {
-          filter: { 'run.id': run.id },
-          update: { $set: workflowRunData },
-          upsert: true
-        }
-      };
-    });
-
-    // Execute the bulk write operation
-    console.log(`Processing ${bulkOps.length} workflow runs in batch mode`);
-    const result = await WorkflowRun.bulkWrite(bulkOps);
-    console.log(`Successfully processed ${bulkOps.length} workflow runs in batch mode`);
-    
-    // Fetch the updated/created documents to return
-    const runIds = payloads.map(payload => payload.workflow_run.id);
-    const updatedRuns = await WorkflowRun.find({ 'run.id': { $in: runIds } });
-    
-    return updatedRuns;
-  } catch (error) {
-    console.error('Error processing workflow runs in batch:', error);
-    
-    // If batch processing fails, fall back to individual processing
-    console.log('Falling back to individual workflow run processing...');
-    const processedRuns = [];
-    
-    for (const payload of payloads) {
-      try {
-        const run = await processWorkflowRun(payload);
-        processedRuns.push(run);
-      } catch (individualError) {
-        console.error(`Error processing individual run ${payload.workflow_run.id}:`, individualError);
-      }
-    }
-    
-    return processedRuns;
   }
 };
 
@@ -203,91 +120,6 @@ export const updateWorkflowJobs = async (runId, jobs) => {
   } catch (error) {
     console.error('Error updating workflow jobs:', error);
     throw error;
-  }
-};
-
-/**
- * Update multiple workflow runs' jobs in batch for better performance
- * @param {Object} batchData - Object with runId as key and jobs array as value
- * @returns {Promise<Array>} - Array of updated workflow runs
- */
-export const updateWorkflowJobsBatch = async (batchData) => {
-  if (!batchData || Object.keys(batchData).length === 0) {
-    return [];
-  }
-
-  try {
-    const bulkOps = [];
-    const runIds = [];
-    
-    // Process each workflow run's jobs
-    for (const [runId, jobs] of Object.entries(batchData)) {
-      if (!jobs || jobs.length === 0) continue;
-      
-      const jobsData = jobs.map(job => ({
-        id: job.id,
-        name: job.name,
-        status: job.status,
-        conclusion: job.conclusion,
-        started_at: job.started_at,
-        completed_at: job.completed_at,
-        runner_id: job.runner_id,
-        runner_name: job.runner_name,
-        runner_group_id: job.runner_group_id,
-        runner_group_name: job.runner_group_name,
-        runner_os: job.runner_os || (job.labels?.find(l => l.includes('ubuntu') || l.includes('windows') || l.includes('macos')) || '').split('-')[0],
-        runner_version: job.labels?.find(l => l.includes('(') && l.includes(')'))?.match(/\((.*?)\)/)?.[1] || '',
-        runner_image_version: job.labels?.find(l => l.includes('-'))?.split('-')[1] || '',
-        steps: job.steps?.map(step => ({
-          name: step.name,
-          status: step.status,
-          conclusion: step.conclusion,
-          number: step.number,
-          started_at: step.started_at,
-          completed_at: step.completed_at
-        })) || []
-      }));
-      
-      bulkOps.push({
-        updateOne: {
-          filter: { 'run.id': parseInt(runId) },
-          update: { $set: { jobs: jobsData } }
-        }
-      });
-      
-      runIds.push(parseInt(runId));
-    }
-    
-    // Execute bulk write if we have operations to perform
-    if (bulkOps.length > 0) {
-      console.log(`Batch updating jobs for ${bulkOps.length} workflow runs`);
-      await WorkflowRun.bulkWrite(bulkOps);
-      console.log(`Successfully updated jobs for ${bulkOps.length} workflow runs`);
-      
-      // Return the updated runs
-      const updatedRuns = await WorkflowRun.find({ 'run.id': { $in: runIds } });
-      return updatedRuns;
-    }
-    
-    return [];
-  } catch (error) {
-    console.error('Error batch updating workflow jobs:', error);
-    
-    // If bulk update fails, fall back to individual updates
-    console.log('Falling back to individual job updates...');
-    const updatedRuns = [];
-    
-    for (const [runId, jobs] of Object.entries(batchData)) {
-      try {
-        if (!jobs || jobs.length === 0) continue;
-        const run = await updateWorkflowJobs(parseInt(runId), jobs);
-        updatedRuns.push(run);
-      } catch (individualError) {
-        console.error(`Error updating jobs for run ${runId}:`, individualError);
-      }
-    }
-    
-    return updatedRuns;
   }
 };
 
@@ -350,6 +182,13 @@ export const processWorkflowJobEvent = async (payload) => {
   const { workflow_job, repository } = payload;
   
   try {
+    console.log('Processing workflow job event:', {
+      jobId: workflow_job.id,
+      runId: workflow_job.run_id,
+      labels: workflow_job.labels,
+      status: workflow_job.status
+    });
+
     const processGitHubRunnerInfo = (job) => {
       let runnerOs = '';
       let runnerVersion = '';
@@ -587,39 +426,9 @@ export const syncRepositoryWorkflowRuns = async (repoPath) => {
     // Get a client for this specific installation
     const { app: octokitWithAuth } = await getGitHubClient(installation.id);
 
-    // First check if the repository has actions enabled to avoid unnecessary API calls
-    try {
-      const { data: actionsPermissions } = await octokitWithAuth.rest.actions.getRepoPermissions({
-        owner,
-        repo
-      });
-      
-      if (actionsPermissions && actionsPermissions.enabled === false) {
-        console.log(`Actions are disabled for repository ${owner}/${repo}, skipping workflow sync`);
-        return [];
-      }
-    } catch (error) {
-      // If we can't get permissions, we'll still try to fetch workflows
-      console.log(`Couldn't determine actions permissions for ${owner}/${repo}, continuing with workflow sync`);
-    }
-
-    // Check if the repository has any workflows before proceeding
-    const { data: workflowsData } = await octokitWithAuth.rest.actions.listRepoWorkflows({
-      owner,
-      repo,
-      per_page: 1
-    });
-
-    if (workflowsData.total_count === 0) {
-      console.log(`No workflows found for ${owner}/${repo}, skipping sync`);
-      return [];
-    }
-    
-    // Get all workflows for the repository
-    console.log(`Found workflows for ${owner}/${repo}, fetching details`);
+    // Get all workflows for the repository first
     const workflows = [];
     let page = 1;
-
     while (true) {
       const { data: { workflows: workflowsPage } } = await octokitWithAuth.rest.actions.listRepoWorkflows({
         owner,
@@ -653,8 +462,7 @@ export const syncRepositoryWorkflowRuns = async (repoPath) => {
       }
     );
 
-    const allWorkflowRunPayloads = [];
-    const jobsBatchData = {};
+    const updatedRuns = [];
 
     // For each workflow, get recent runs
     for (const workflow of workflows) {
@@ -693,9 +501,27 @@ export const syncRepositoryWorkflowRuns = async (repoPath) => {
         page++;
       }
 
-      // Prepare batch processing data
+      // Process each run
       for (const run of runs) {
-        // Create payload for batch processing
+        // Fetch jobs for the run
+        const jobs = [];
+        page = 1;
+        
+        while (true) {
+          const { data: { jobs: jobsPage } } = await octokitWithAuth.rest.actions.listJobsForWorkflowRun({
+            owner,
+            repo,
+            run_id: run.id,
+            per_page: 100,
+            page
+          });
+
+          if (jobsPage.length === 0) break;
+          jobs.push(...jobsPage);
+          page++;
+        }
+
+        // Process workflow run with jobs
         const workflowRunPayload = {
           workflow_run: run,
           repository: {
@@ -707,45 +533,18 @@ export const syncRepositoryWorkflowRuns = async (repoPath) => {
             }
           }
         };
-        allWorkflowRunPayloads.push(workflowRunPayload);
 
-        // Fetch jobs for the run if not already fetched
-        if (!jobsBatchData[run.id]) {
-          const jobs = [];
-          page = 1;
-          
-          while (true) {
-            const { data: { jobs: jobsPage } } = await octokitWithAuth.rest.actions.listJobsForWorkflowRun({
-              owner,
-              repo,
-              run_id: run.id,
-              per_page: 100,
-              page
-            });
+        const workflowRun = await processWorkflowRun(workflowRunPayload);
 
-            if (jobsPage.length === 0) break;
-            jobs.push(...jobsPage);
-            page++;
-          }
-          
-          if (jobs.length > 0) {
-            jobsBatchData[run.id] = jobs;
-          }
+        if (jobs.length > 0) {
+          await updateWorkflowJobs(run.id, jobs);
         }
+
+        updatedRuns.push(workflowRun);
       }
     }
 
-    // Process all workflow runs in batch
-    console.log(`Processing ${allWorkflowRunPayloads.length} workflow runs for ${owner}/${repo} in batch`);
-    const processedRuns = await processWorkflowRunsBatch(allWorkflowRunPayloads);
-    
-    // Process all jobs in batch
-    if (Object.keys(jobsBatchData).length > 0) {
-      console.log(`Processing jobs for ${Object.keys(jobsBatchData).length} workflow runs in batch`);
-      await updateWorkflowJobsBatch(jobsBatchData);
-    }
-
-    return processedRuns;
+    return updatedRuns;
   } catch (error) {
     console.error('Error syncing repository workflow runs:', error);
     throw error;

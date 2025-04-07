@@ -1,7 +1,6 @@
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
-import { config } from 'dotenv';
 import { createNodeMiddleware as _createNodeMiddleware } from '@octokit/webhooks';
 import connectDB from './src/config/db.js';
 import apiRoutes from './src/routes/api.js';
@@ -12,9 +11,6 @@ import { fileURLToPath } from 'url';
 import getRawBody from 'raw-body';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Load environment variables from root .env
-config({ path: path.join(__dirname, '../.env') });
 
 // Connect to database
 connectDB();

@@ -27,7 +27,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PendingIcon from '@mui/icons-material/PendingActions';
 import apiService from '../../api/apiService';
-import { setupSocketListeners, socket, defaultAlertConfig } from '../../api/socketService';
+import { setupSocketListeners, socket } from '../../api/socketService';
 import { formatDuration, formatDate } from '../../common/utils/statusHelpers';
 import { keyframes } from '@emotion/react';
 import { ToastContainer } from 'react-toastify';
@@ -332,9 +332,30 @@ const Dashboard = () => {
           if (!prev.some(workflow => workflow.run.id === updatedWorkflow.run.id)) {
             return prev;
           }
-          return prev.map(workflow =>
-            workflow.run.id === updatedWorkflow.run.id ? updatedWorkflow : workflow
-          );
+          return prev.map(workflow => {
+            if (workflow.run.id === updatedWorkflow.run.id) {
+              // If status changed, fetch fresh metrics
+              if (workflow.run.status !== updatedWorkflow.run.status) {
+                fetchActiveMetrics();
+                
+                // If the workflow was previously in longQueuedWorkflows and is no longer queued,
+                // remove it from longQueuedWorkflows
+                if (longQueuedWorkflows[updatedWorkflow.run.id] && 
+                    updatedWorkflow.run.status !== 'queued' && 
+                    updatedWorkflow.run.status !== 'waiting' && 
+                    updatedWorkflow.run.status !== 'pending') {
+                  setLongQueuedWorkflows(prev => {
+                    const updated = { ...prev };
+                    delete updated[updatedWorkflow.run.id];
+                    return updated;
+                  });
+                  console.log(`Removed workflow ${updatedWorkflow.run.id} from longQueuedWorkflows as status changed to ${updatedWorkflow.run.status}`);
+                }
+              }
+              return updatedWorkflow;
+            }
+            return workflow;
+          });
         });
       },
       onJobsUpdate: (workflowWithJobs) => {
@@ -511,6 +532,20 @@ const Dashboard = () => {
               // If status changed, fetch fresh metrics
               if (workflow.run.status !== updatedWorkflow.run.status) {
                 fetchActiveMetrics();
+                
+                // If the workflow was previously in longQueuedWorkflows and is no longer queued,
+                // remove it from longQueuedWorkflows
+                if (longQueuedWorkflows[updatedWorkflow.run.id] && 
+                    updatedWorkflow.run.status !== 'queued' && 
+                    updatedWorkflow.run.status !== 'waiting' && 
+                    updatedWorkflow.run.status !== 'pending') {
+                  setLongQueuedWorkflows(prev => {
+                    const updated = { ...prev };
+                    delete updated[updatedWorkflow.run.id];
+                    return updated;
+                  });
+                  console.log(`Removed workflow ${updatedWorkflow.run.id} from longQueuedWorkflows as status changed to ${updatedWorkflow.run.status}`);
+                }
               }
               return updatedWorkflow;
             }
@@ -975,7 +1010,7 @@ const Dashboard = () => {
                                     borderColor: 'rgba(240, 246, 252, 0.1)'
                                   }
                                 }}>
-                                  {workflowData.runs.slice(0, 10).reverse().map((workflow, index) => {
+                                  {workflowData.runs.slice(0, 10).reverse().map((workflow, index, array) => {
                                     const run = {
                                       ...workflow.run,
                                       id: workflow.run.id.toString()
@@ -985,7 +1020,7 @@ const Dashboard = () => {
                                         key={workflow.run.id}
                                         sx={{
                                           position: 'relative',
-                                          '&::after': index === 0 ? {
+                                          '&::after': index === (array.length - 1) ? {
                                             content: '""',
                                             position: 'absolute',
                                             top: -12,

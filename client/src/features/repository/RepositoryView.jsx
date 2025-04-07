@@ -9,11 +9,9 @@ import {
   Tooltip,
   Card,
   CardContent,
-  Link,
   Button,
   Stack,
-  CircularProgress,
-  Divider,
+  CircularProgress
 } from '@mui/material';
 import BackIcon from '@mui/icons-material/ArrowBack';
 import GitHubIcon from '@mui/icons-material/GitHub';
@@ -23,9 +21,34 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import BugIcon from '@mui/icons-material/BugReport';
 import TimeIcon from '@mui/icons-material/AccessTime';
 import { Line, Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip as ChartTooltip,
+  Legend,
+  Filler
+} from 'chart.js';
 import { formatDuration, formatDate } from '../../common/utils/statusHelpers';
 import apiService from '../../api/apiService';
 import { setupSocketListeners } from '../../api/socketService';
+
+// Register the chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  ChartTooltip,
+  Legend,
+  Filler
+);
 
 const RepositoryView = () => {
   const { repoName } = useParams();

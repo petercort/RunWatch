@@ -14,9 +14,7 @@ import {
 } from '@mui/material';
 // Replace bulk icon imports with direct path imports
 import RefreshIcon from '@mui/icons-material/Refresh';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
+
 import GitHubIcon from '@mui/icons-material/GitHub';
 
 // Only import the Chart.js components you actually use
