@@ -1,8 +1,8 @@
 import io from 'socket.io-client';
 import apiService from './apiService';
 
-// Use the environment variables, falling back to development defaults if not set
-const WS_URL = process.env.REACT_APP_WEBSOCKET_URL || 'http://localhost:5001';
+// Update environment variables to use Vite's format
+const WS_URL = import.meta.env.VITE_APP_WEBSOCKET_URL || 'http://localhost:5001';
 
 // Default configuration for alerts
 export const defaultAlertConfig = {
@@ -37,10 +37,10 @@ const queuedWorkflows = new Map();
 // Load existing queued workflows from the server
 const loadExistingQueuedWorkflows = async (alertConfig = defaultAlertConfig) => {
   try {
-    console.log('Loading existing queued workflows from server...');
+    //console.log('Loading existing queued workflows from server...');
     const workflows = await apiService.getQueuedWorkflows();
     
-    console.log(`Loaded ${workflows.length} queued workflows from server`);
+    //console.log(`Loaded ${workflows.length} queued workflows from server`);
     
     workflows.forEach(workflow => {
       if (workflow.run && workflow.run.status && ['queued', 'waiting', 'pending'].includes(workflow.run.status)) {
@@ -58,7 +58,7 @@ const loadExistingQueuedWorkflows = async (alertConfig = defaultAlertConfig) => 
     
     // Run the check immediately after loading existing workflows
     if (queuedWorkflows.size > 0) {
-      console.log('Running immediate check for long-queued workflows on load');
+      //console.log('Running immediate check for long-queued workflows on load');
       checkQueuedWorkflows(alertConfig);
     }
   } catch (error) {
@@ -71,20 +71,20 @@ const checkQueuedWorkflows = (alertConfig = defaultAlertConfig) => {
   const threshold = alertConfig?.queuedTimeAlertThreshold || defaultAlertConfig.queuedTimeAlertThreshold;
   const now = new Date();
 
-  console.log(`Checking ${queuedWorkflows.size} queued workflows against threshold of ${threshold} minutes`);
+  //console.log(`Checking ${queuedWorkflows.size} queued workflows against threshold of ${threshold} minutes`);
   
   queuedWorkflows.forEach((workflow, id) => {
     const queuedTime = new Date(workflow.queued_at);
     const queuedMinutes = (now - queuedTime) / (1000 * 60);
 
-    console.log(`Workflow ${workflow.name} (${id}) has been queued for ${queuedMinutes.toFixed(2)} minutes`);
+    //console.log(`Workflow ${workflow.name} (${id}) has been queued for ${queuedMinutes.toFixed(2)} minutes`);
 
     if (queuedMinutes >= threshold && !workflow.alerted) {
       // Mark as alerted so we don't send multiple alerts
       workflow.alerted = true;
       queuedWorkflows.set(id, workflow);
       
-      console.log(`ALERT: Workflow ${workflow.name} exceeded queue threshold (${queuedMinutes.toFixed(2)} minutes)`);
+      //console.log(`ALERT: Workflow ${workflow.name} exceeded queue threshold (${queuedMinutes.toFixed(2)} minutes)`);
 
       // Emit an event for the long-queued workflow
       socket.emit('long-queued-workflow', {
@@ -95,18 +95,18 @@ const checkQueuedWorkflows = (alertConfig = defaultAlertConfig) => {
       });
       
       // Debug: Also log the emitted event data
-      console.log('Emitted long-queued-workflow event:', {
+      /* console.log('Emitted long-queued-workflow event:', {
         workflow: workflow.name,
         repository: workflow.repository,
         queuedMinutes: Math.floor(queuedMinutes),
         id: id
-      });
+      }); */
     }
   });
 };
 
 export const setupSocketListeners = (callbacks) => {
-  console.log('Setting up socket listeners');
+  //console.log('Setting up socket listeners');
   
   // Set up alert config early so it can be used in the initial check
   const alertConfig = callbacks.alertConfig || defaultAlertConfig;
@@ -122,9 +122,7 @@ export const setupSocketListeners = (callbacks) => {
     if (currentUpdate > lastUpdate) {
       lastUpdateTimes.set(data.run.id, currentUpdate);
       callback(data);
-    } else {
-      console.log(`Skipping outdated ${eventName} update for workflow ${data.run.id}`);
-    }
+    } 
   };
 
   // Debounced callback handlers
@@ -143,7 +141,6 @@ export const setupSocketListeners = (callbacks) => {
   // Queue time monitoring
   // Track workflows in queued state for monitoring
   socket.on('workflowUpdate', (data) => {
-    console.log('Received workflow update:', data);
     
     // For workflows that are queued, add them to the monitoring list
     if (data.run && data.run.status === 'queued') {
@@ -167,7 +164,6 @@ export const setupSocketListeners = (callbacks) => {
   });
 
   socket.on('workflow_update', (data) => {
-    console.log('Received workflow_update event:', data);
     
     // Similar queue monitoring for workflow_update events
     if (data.run && data.run.status === 'queued') {
@@ -187,7 +183,7 @@ export const setupSocketListeners = (callbacks) => {
   });
 
   socket.on('workflowJobsUpdate', (data) => {
-    console.log('Received workflowJobsUpdate event:', data);
+    //console.log('Received workflowJobsUpdate event:', data);
     debouncedJobsUpdate(data);
   });
 

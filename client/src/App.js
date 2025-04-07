@@ -9,6 +9,7 @@ import RepositoryStats from './features/stats/RepositoryStats';
 import WorkflowHistory from './features/workflows/WorkflowHistory';
 import RepositoryView from './features/repository/RepositoryView';
 import Settings from './features/settings/Settings';
+import RunnerGroups from './features/runners/RunnerGroups';
 import './App.css';
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
             <Route path="/repository/:repoName" element={<RepositoryView />} />
             <Route path="/stats" element={<RepositoryStats />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/runners" element={<RunnerGroups />} />
           </Routes>
         </Layout>
       </Router>

@@ -11,9 +11,7 @@ export const getGitHubClient = async (installationId = null) => {
     }
 
     try {
-        console.log('Reading private key from:', privateKeyPath);
         const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
-        console.log('Private key length:', privateKey.length);
 
         // Base authentication configuration
         const auth = {
@@ -30,14 +28,13 @@ export const getGitHubClient = async (installationId = null) => {
             auth.installationId = installationId;
         }
 
-        // Create Octokit instance with configured auth
         const octokit = new Octokit({
             authStrategy: createAppAuth,
             auth,
             baseUrl: 'https://api.github.com',
             log: {
-                debug: console.debug,
-                info: console.info,
+                //debug: console.debug,
+                //info: console.info,
                 warn: console.warn,
                 error: console.error
             }
@@ -45,9 +42,7 @@ export const getGitHubClient = async (installationId = null) => {
 
         // If no installation ID provided, return the app client and list of installations
         if (!installationId) {
-            console.log('Listing installations...');
             const { data: installations } = await octokit.rest.apps.listInstallations();
-            console.log(`Found ${installations.length} installations`);
             return {
                 app: octokit,
                 installations: installations.map(install => ({
@@ -59,7 +54,6 @@ export const getGitHubClient = async (installationId = null) => {
                 }))
             };
         }
-
         return { app: octokit };
     } catch (error) {
         console.error('Error in getGitHubClient:', error);

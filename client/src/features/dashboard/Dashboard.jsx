@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -243,10 +243,7 @@ const Dashboard = () => {
   });
   const [buildMetrics, setBuildMetrics] = useState({});
   const [statusFilter, setStatusFilter] = useState('all');
-  const [alertConfig, setAlertConfig] = useState(() => {
-    const savedConfig = localStorage.getItem('alertConfig');
-    return savedConfig ? JSON.parse(savedConfig) : defaultAlertConfig;
-  });
+  const [alertConfig, setAlertConfig] = useState(() => {});
   
   // Track long-queued workflows
   const [longQueuedWorkflows, setLongQueuedWorkflows] = useState({});
