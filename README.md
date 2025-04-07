@@ -191,61 +191,48 @@ The application can be deployed using Docker and Docker Compose. This will creat
    cd RunWatch
    ```
 
-2. Create a `.env` file in the root directory:
+2. Copy the example environment file:
 
    ```bash
-   # Node environment
+   cp .env.docker.example .env
+   ```
+
+3. Configure the following environment variables in `.env`:
+
+   ```ini
+   # Node Environment
    NODE_ENV=production
 
-   # Server Configuration
-   PORT=5001
-   MONGODB_URI=mongodb://mongodb:27017/runwatch
+   # MongoDB Configuration
+   MONGO_INITDB_DATABASE=runwatch
+   MONGO_INITDB_ROOT_USERNAME=admin
+   MONGO_INITDB_ROOT_PASSWORD=changeme
 
-   # GitHub Configuration
-   GITHUB_WEBHOOK_SECRET=your_github_webhook_secret
-   GITHUB_APP_ID=your_github_app_id
-   GITHUB_APP_PRIVATE_KEY_PATH=./path/to/private-key.pem
+   # GitHub App Configuration
+   GITHUB_APP_ID=your_app_id
+   GITHUB_WEBHOOK_SECRET=your_webhook_secret
+   GITHUB_APP_PRIVATE_KEY_PATH=/absolute/path/to/private-key.pem
 
    # Client Configuration
-   CLIENT_URL=http://localhost
    VITE_APP_API_URL=http://localhost/api
    VITE_APP_WEBSOCKET_URL=ws://localhost
    ```
 
-3. Use the deployment script to manage the application:
+4. Use the deployment script to manage the application:
 
-   ```bash
-   # Start all services
-   ./deploy.sh start
+   - `./deploy.sh start` - Start all services
+   - `./deploy.sh stop` - Stop all services
+   - `./deploy.sh restart` - Restart all services
+   - `./deploy.sh logs` - Show logs from all services
+   - `./deploy.sh build` - Rebuild all services
+   - `./deploy.sh clean` - Remove all containers and volumes
+   - `./deploy.sh status` - Show status of all services
 
-   # View logs
-   ./deploy.sh logs
-
-   # Stop all services
-   ./deploy.sh stop
-
-   # Rebuild services
-   ./deploy.sh build
-
-   # Check status
-   ./deploy.sh status
-   ```
-
-4. Access the application:
+5. Access the application:
 
 - Frontend: http://localhost
 - Backend API: http://localhost/api
 - WebSocket: ws://localhost/socket.io
-
-#### Available Deploy Script Commands
-
-- `./deploy.sh start` - Start all services
-- `./deploy.sh stop` - Stop all services
-- `./deploy.sh restart` - Restart all services
-- `./deploy.sh logs` - Show logs from all services
-- `./deploy.sh build` - Rebuild all services
-- `./deploy.sh clean` - Remove all containers and volumes
-- `./deploy.sh status` - Show status of all services
 
 #### Container Management
 
