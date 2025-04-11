@@ -1,70 +1,81 @@
-# Getting Started with Create React App
+# RunWatch Client
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+The client-side application for RunWatch, built with React and Vite.
 
-## Available Scripts
+This application provides real-time monitoring and management of GitHub Actions workflows.
 
-In the project directory, you can run:
+## Technology Stack
 
-### `npm start`
+- **Framework**: React 19
+- **Build Tool**: Vite 6
+- **UI Library**: Material-UI v6
+- **State Management**: React Context/Hooks
+- **Routing**: React Router v7
+- **Real-time Updates**: Socket.IO
+- **Data Visualization**: Chart.js with react-chartjs-2
+- **API Communication**: Axios
+- **Testing**: Vitest with React Testing Library
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Available Commands
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+```bash
+# Development
+npm start         # Start development server
+npm run preview   # Preview production build locally
 
-### `npm test`
+# Building
+npm run build         # Production build
+npm run build:dev     # Development build
+npm run build:prod    # Production build with optimizations
+npm run analyze       # Build and analyze bundle size
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+# Testing
+npm test             # Run tests
+npm run test:watch   # Run tests in watch mode
 
-### `npm run build`
+# Code Quality
+npm run lint         # Run ESLint
+npm run lint:check   # Check for lint issues
+npm run lint:fix     # Fix automatic lint issues
+npm run format       # Format code with Prettier
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Architecture
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+The client application follows a feature-based architecture:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```ini
+src/
+├── api/          # API and WebSocket services
+├── common/       # Shared components and utilities
+│   ├── components/
+│   ├── theme/
+│   └── utils/
+└── features/     # Feature-based modules
+    ├── dashboard/
+    ├── repository/
+    ├── runners/
+    ├── settings/
+    ├── stats/
+    └── workflows/
+```
 
-### `npm run eject`
+## Build Optimization
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+The production build is optimized with:
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- Code splitting for vendor chunks (React, MUI, Chart.js)
+- Gzip and Brotli compression
+- Tree shaking
+- Modern browser targeting (ES2015+)
+- Source maps in development only
+- Bundle size analysis via rollup-plugin-visualizer
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## Development
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+The development server runs on port 3000 by default and includes:
 
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Hot Module Replacement (HMR)
+- Path aliases (@/ points to src/)
+- Automatic dependency optimization
+- ESLint and Prettier integration
