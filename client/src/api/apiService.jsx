@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost/api';
+// In development, use relative paths so Vite proxy can handle them
+// In production, use the environment variable or fallback to relative paths
+const API_URL = import.meta.env.VITE_APP_API_URL || '/api';
 
 console.log('Using API URL:', API_URL);
 

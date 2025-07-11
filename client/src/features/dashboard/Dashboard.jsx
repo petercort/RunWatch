@@ -249,6 +249,9 @@ const Dashboard = () => {
   const pageSizeOptions = [30, 50, 100];
   const navigate = useNavigate();
 
+  // Add state for selected repository
+  const [selectedRepository, setSelectedRepository] = useState('all');
+
   useEffect(() => {
     localStorage.setItem('dashboardPageSize', pagination.pageSize.toString());
   }, [pagination.pageSize]);
