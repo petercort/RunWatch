@@ -1,8 +1,9 @@
 import io from 'socket.io-client';
 import apiService from './apiService';
 
-// Update environment variables to use Vite's format
-const WS_URL = import.meta.env.VITE_APP_WEBSOCKET_URL || 'ws://localhost:5001';
+// In development, use relative path so Vite proxy can handle it
+// In production, use the environment variable or default to current host
+const WS_URL = import.meta.env.VITE_APP_WEBSOCKET_URL || window.location.origin;
 
 // Default configuration for alerts
 export const defaultAlertConfig = {

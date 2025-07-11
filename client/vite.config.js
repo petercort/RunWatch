@@ -41,6 +41,20 @@ export default defineConfig(({ command, mode }) => {
     server: {
       port: 3000, // Match the default CRA port
       open: true, // Open browser on start
+      proxy: {
+        // Proxy API requests to local backend
+        '/api': {
+          target: 'http://localhost:5001',
+          changeOrigin: true,
+          secure: false,
+        },
+        // Proxy WebSocket connections
+        '/socket.io': {
+          target: 'http://localhost:5001',
+          changeOrigin: true,
+          ws: true,
+        },
+      },
     },
     
     build: {
