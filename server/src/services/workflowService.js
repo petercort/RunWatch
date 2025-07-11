@@ -621,3 +621,111 @@ export const getActiveWorkflowMetrics = async () => {
     throw error;
   }
 };
+
+export const cancelAllQueuedWorkflowRuns = async (repoPath) => {
+  const { getGitHubClient } = await import('../utils/githubAuth.js');
+  
+  try {
+    console.log(`Cancelling all queued workflow runs for repository: ${repoPath}`);
+    
+    // First, get all queued workflow runs for this repository
+    const queuedRuns = await WorkflowRun.find({
+      'repository.fullName': repoPath,
+      'run.status': { $in: ['queued', 'waiting', 'pending'] },
+      'run.conclusion': null
+    });
+
+    console.log(`Found ${queuedRuns.length} queued runs to cancel`);
+
+    if (queuedRuns.length === 0) {
+      return {
+        totalQueued: 0,
+        cancelled: 0,
+        failed: 0,
+        cancelledRuns: [],
+        failedRuns: []
+      };
+    }
+
+    // Get the GitHub client - we need to find the installation ID for this repository
+    const { installations } = await getGitHubClient();
+    
+    // Try to find the installation ID for this repository
+    let githubClient = null;
+    let installationFound = false;
+    
+    for (const installation of installations) {
+      try {
+        const client = await getGitHubClient(installation.id);
+        // Try to get repository info to verify access
+        const [owner, repo] = repoPath.split('/');
+        await client.app.rest.repos.get({ owner, repo });
+        githubClient = client.app;
+        installationFound = true;
+        console.log(`Found installation ${installation.id} for repository ${repoPath}`);
+        break;
+      } catch (error) {
+        // Continue to next installation if this one doesn't have access
+        continue;
+      }
+    }
+
+    if (!installationFound || !githubClient) {
+      throw new Error(`No GitHub App installation found with access to repository: ${repoPath}`);
+    }
+
+    const results = {
+      totalQueued: queuedRuns.length,
+      cancelled: 0,
+      failed: 0,
+      cancelledRuns: [],
+      failedRuns: []
+    };
+
+    // Cancel each workflow run using GitHub API
+    for (const workflowRun of queuedRuns) {
+      try {
+        const [owner, repo] = repoPath.split('/');
+        const runId = workflowRun.run.id;
+        
+        console.log(`Cancelling workflow run ${runId} for ${owner}/${repo}`);
+        
+        // Cancel the workflow run using GitHub API
+        await githubClient.rest.actions.cancelWorkflowRun({
+          owner,
+          repo,
+          run_id: runId
+        });
+
+        // Update the workflow run in our database
+        const updatedRun = await WorkflowRun.findOneAndUpdate(
+          { 'run.id': runId },
+          { 
+            'run.status': 'completed',
+            'run.conclusion': 'cancelled',
+            'run.updated_at': new Date()
+          },
+          { new: true }
+        );
+
+        results.cancelled++;
+        results.cancelledRuns.push(updatedRun);
+        
+        console.log(`Successfully cancelled workflow run ${runId}`);
+      } catch (error) {
+        console.error(`Failed to cancel workflow run ${workflowRun.run.id}:`, error);
+        results.failed++;
+        results.failedRuns.push({
+          runId: workflowRun.run.id,
+          error: error.message
+        });
+      }
+    }
+
+    console.log(`Cancellation complete: ${results.cancelled} cancelled, ${results.failed} failed`);
+    return results;
+  } catch (error) {
+    console.error('Error cancelling queued workflow runs:', error);
+    throw error;
+  }
+};

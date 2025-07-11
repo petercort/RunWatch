@@ -332,3 +332,26 @@ export const getQueuedWorkflows = async (req, res) => {
     return errorResponse(res, 'Error fetching queued workflows', 500, error);
   }
 };
+
+export const cancelAllQueuedWorkflowRuns = async (req, res) => {
+  try {
+    const repoPath = req.params[0];
+    if (!repoPath) {
+      return errorResponse(res, 'Repository name is required', 400);
+    }
+
+    const result = await workflowService.cancelAllQueuedWorkflowRuns(repoPath);
+    
+    // Emit updates for each cancelled workflow run
+    if (req.io && result.cancelledRuns) {
+      result.cancelledRuns.forEach(run => {
+        req.io.emit('workflowUpdate', run);
+      });
+    }
+
+    return successResponse(res, result);
+  } catch (error) {
+    console.error('Error cancelling all queued workflow runs:', error);
+    return errorResponse(res, 'Error cancelling all queued workflow runs', 500, error);
+  }
+};
