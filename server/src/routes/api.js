@@ -27,6 +27,9 @@ router.get('/workflow-runs/repo/*', workflowController.getRepoWorkflowRuns);
 // Sync all workflow runs for a repository
 router.post('/workflow-runs/repo/*/sync', workflowController.syncRepositoryWorkflowRuns);
 
+// Cancel all queued workflow runs for a repository
+router.post('/workflow-runs/repo/*/cancel-all', workflowController.cancelAllQueuedWorkflowRuns);
+
 // Get workflow statistics
 router.get('/stats', workflowController.getWorkflowStats);
 

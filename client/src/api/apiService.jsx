@@ -69,6 +69,17 @@ const apiService = {
     }
   },
 
+  // Cancel all queued workflow runs for a repository
+  cancelAllQueuedWorkflowRuns: async (repoName) => {
+    try {
+      const response = await axios.post(`${API_URL}/workflow-runs/repo/${repoName}/cancel-all`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Error cancelling all queued workflow runs for repo ${repoName}:`, error);
+      throw error;
+    }
+  },
+
   // Get workflow statistics
   getWorkflowStats: async () => {
     try {

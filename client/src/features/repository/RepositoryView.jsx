@@ -11,7 +11,12 @@ import {
   CardContent,
   Button,
   Stack,
-  CircularProgress
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText
 } from '@mui/material';
 import BackIcon from '@mui/icons-material/ArrowBack';
 import GitHubIcon from '@mui/icons-material/GitHub';
@@ -20,6 +25,7 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import BugIcon from '@mui/icons-material/BugReport';
 import TimeIcon from '@mui/icons-material/AccessTime';
+import CancelIcon from '@mui/icons-material/Cancel';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -58,6 +64,9 @@ const RepositoryView = () => {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(0);
 
   const calculateRepoStats = (runs) => {
     if (!runs.length) return null;
@@ -254,6 +263,52 @@ const RepositoryView = () => {
     navigate(`/workflow-history/${encodedRepoName}/${encodedWorkflowName}`);
   };
 
+  const handleCancelAllQueued = async () => {
+    try {
+      // First get the count of queued workflows for this repository
+      const queuedWorkflows = await apiService.getQueuedWorkflows();
+      const queuedForRepo = queuedWorkflows.filter(
+        workflow => workflow.repository.fullName === decodeURIComponent(repoName)
+      );
+      
+      setQueuedCount(queuedForRepo.length);
+      
+      if (queuedForRepo.length === 0) {
+        setError('No queued workflow runs found for this repository.');
+        return;
+      }
+      
+      setConfirmDialogOpen(true);
+    } catch (err) {
+      setError('Failed to fetch queued workflows. Please try again later.');
+      console.error(err);
+    }
+  };
+
+  const confirmCancelAll = async () => {
+    try {
+      setCancelling(true);
+      setConfirmDialogOpen(false);
+      
+      const result = await apiService.cancelAllQueuedWorkflowRuns(decodeURIComponent(repoName));
+      
+      // Refresh the data to get the latest stats
+      await fetchRepositoryData();
+      
+      setError(null);
+      console.log('Cancelled workflow runs:', result);
+    } catch (err) {
+      setError('Failed to cancel workflow runs. Please try again later.');
+      console.error(err);
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleCloseConfirmDialog = () => {
+    setConfirmDialogOpen(false);
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -323,6 +378,23 @@ const RepositoryView = () => {
           }}
         >
           {syncing ? 'Syncing...' : 'Sync All'}
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<CancelIcon />}
+          onClick={handleCancelAllQueued}
+          disabled={cancelling}
+          sx={{ 
+            mr: 1,
+            borderColor: 'rgba(248, 81, 73, 0.2)',
+            color: '#F85149',
+            '&:hover': {
+              borderColor: 'rgba(248, 81, 73, 0.5)',
+              bgcolor: 'rgba(248, 81, 73, 0.1)'
+            }
+          }}
+        >
+          {cancelling ? 'Cancelling...' : 'Cancel All Queued'}
         </Button>
         <Button
           variant="outlined"
@@ -562,6 +634,55 @@ const RepositoryView = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={handleCloseConfirmDialog}
+        aria-labelledby="cancel-dialog-title"
+        aria-describedby="cancel-dialog-description"
+        sx={{
+          '& .MuiDialog-paper': {
+            bgcolor: '#161B22',
+            border: '1px solid rgba(240, 246, 252, 0.1)',
+            color: '#E6EDF3'
+          }
+        }}
+      >
+        <DialogTitle id="cancel-dialog-title" sx={{ color: '#E6EDF3' }}>
+          Cancel All Queued Workflow Runs
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="cancel-dialog-description" sx={{ color: '#8B949E' }}>
+            This will cancel {queuedCount} queued run{queuedCount !== 1 ? 's' : ''}, this cannot be undone!
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={handleCloseConfirmDialog}
+            sx={{ 
+              color: '#8B949E',
+              '&:hover': {
+                bgcolor: 'rgba(139, 148, 158, 0.1)'
+              }
+            }}
+          >
+            Back
+          </Button>
+          <Button 
+            onClick={confirmCancelAll}
+            variant="contained"
+            sx={{ 
+              bgcolor: '#F85149',
+              '&:hover': {
+                bgcolor: '#DA4336'
+              }
+            }}
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
